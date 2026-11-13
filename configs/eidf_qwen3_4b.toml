@@ -1,0 +1,32 @@
+name = "EIDF A100 Qwen3-4B benchmark"
+run_dir = "/workspace/writeable/non-verifiable-rewards/outputs/qwen3_4b_20261113"
+cache_dir = "/root/.cache/non-verifiable-rewards"
+pilot = false
+device = "cuda"
+dtype = "bfloat16"
+cpu_dynamic_int8 = false
+threads = 4
+seed = 1729
+pairs_per_dataset = 2000
+bootstrap_samples = 10000
+batch_size = 8
+lm_batch_size = 1
+max_context_tokens = 32768
+max_prompt_tokens = 0
+max_candidate_tokens = 0
+max_reference_tokens = 0
+allow_metric_truncation = true
+tie_tolerance = 0.0000001
+
+[models.lm]
+id = "Qwen/Qwen3-4B"
+revision = "main"
+
+[models.bertscore]
+id = "FacebookAI/roberta-large"
+revision = "main"
+num_layers = 17
+
+[models.bleurt]
+name = "BLEURT-20"
+url = "https://storage.googleapis.com/bleurt-oss-21/BLEURT-20.zip"

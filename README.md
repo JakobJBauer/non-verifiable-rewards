@@ -4,11 +4,37 @@ Offline reward scoring for Reddit TL;DR and LitBench preference comparisons.
 Each reward lives in its own module under `src/non_verifiable_rewards/rewards`
 and can also be imported from `non_verifiable_rewards.rewards`.
 
+See the [technical report](docs/technical_overview.md) for the dataset schema,
+reference construction, exact reward formulas, self-certainty implementation,
+token limits, inference details, statistical analysis, and saved artifacts.
+The [likelihood-method audit](docs/methodology_audit.md) checks formulas against
+the papers and authors' code, traces every selected reference to its source,
+and explains why the completed-candidate adaptations are not paper replications
+or an implementation of RLPR's mean-probability reward.
+
 Dataset loaders live in `src/non_verifiable_rewards/data` and are imported with:
 
 ```python
 from non_verifiable_rewards.data import load_litbench, load_sff
 ```
+
+## Completed GPU benchmark
+
+The 13 November 2026 EIDF run scored all seven methods on **2,000 pairs per
+dataset** using Qwen3-4B, RoBERTa-large, and BLEURT-20. All 56,000 candidate
+scores completed without errors. Self-certainty reached 60.3% accuracy on
+Reddit and 61.45% on LitBench; see the analysis for paired uncertainty,
+length effects, and the substantial LitBench encoder-truncation limitation.
+
+The local results are in `outputs/eidf_qwen3_4b/` (ignored by Git):
+[interpretation and artifact guide](outputs/eidf_qwen3_4b/analysis.md),
+[HTML report and figures](outputs/eidf_qwen3_4b/report.html), and
+[accuracy table](outputs/eidf_qwen3_4b/tables/summary.csv).
+The persistent copy is
+`/workspace/writeable/non-verifiable-rewards/outputs/qwen3_4b_20261113` on EIDF.
+[Execution and recovery instructions](docs/eidf_execution.md) describe the
+saved source, dependencies, and model cache. The CPU pilot remains unchanged
+at Git tag `cpu-pilot-128-pairs`.
 
 ## Run the experiments
 
@@ -107,6 +133,14 @@ away. An explicit evaluation scope allows incomplete LM scores to be retained
 in exports with `included_in_primary_benchmark=False`.
 
 ## Run later on the GPU cluster
+
+For the EIDF development VM, use `configs/eidf_qwen3_4b.toml` and
+`scripts/run_eidf.sh`. The complete installation, GPU checks, tests, and asset
+preparation are in [`scripts/bootstrap_eidf.sh`](scripts/bootstrap_eidf.sh),
+using the recorded [GPU dependency versions](requirements/README.md).
+See [EIDF execution and recovery](docs/eidf_execution.md)
+for the separate PyTorch/TensorFlow environments, fast local model storage,
+and persistent results under `/workspace/writeable`.
 
 `configs/cluster_qwen3_4b.toml` selects 2,000 pairs per dataset, Qwen3-4B in
 bfloat16, RoBERTa-large BERTScore, and BLEURT-20. CPU int8 is disabled. LM text

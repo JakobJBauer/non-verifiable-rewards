@@ -114,6 +114,63 @@ def test_real_transformers_causal_lm_matches_masked_loss(tiny_bert):
     ) == pytest.approx(expected, abs=1e-6)
 
 
+@pytest.mark.parametrize("dtype_name", ["float32", "bfloat16"])
+def test_qwen3_reference_scores_match_independent_masked_loss(tiny_bert, dtype_name):
+    """Check Qwen3's real attention/logits_to_keep path, without pretrained weights."""
+    torch = pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained(tiny_bert)
+    tokenizer.bos_token = "[CLS]"
+    tokenizer.eos_token = "[SEP]"
+    torch.manual_seed(1729)
+    model = (
+        transformers.Qwen3ForCausalLM(
+            transformers.Qwen3Config(
+                vocab_size=len(tokenizer),
+                hidden_size=32,
+                intermediate_size=64,
+                num_hidden_layers=2,
+                num_attention_heads=2,
+                num_key_value_heads=1,
+                head_dim=16,
+                max_position_embeddings=64,
+                bos_token_id=tokenizer.bos_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+        )
+        .to(dtype=getattr(torch, dtype_name))
+        .eval()
+    )
+    contexts = ["the cat", "the", "the cat sat dog"]
+    targets = ["sat", "dog ran", "cat"]
+    expected = []
+    for context, target in zip(contexts, targets, strict=True):
+        prefix = [tokenizer.bos_token_id] + tokenizer.encode(
+            context, add_special_tokens=False
+        )
+        tokens = tokenizer.encode(target, add_special_tokens=False)
+        ids = torch.tensor([prefix + tokens])
+        labels = ids.clone()
+        labels[:, : len(prefix)] = -100
+        with torch.inference_mode():
+            # Transformers shifts and masks the loss itself, independently of our scorer.
+            expected.append(
+                -model(input_ids=ids, labels=labels, use_cache=False).loss.item()
+            )
+    scorer = CausalLMScorer(model, tokenizer, batch_size=3, token_chunk_size=1)
+    assert scorer._select_logits
+    optimized = scorer.log_likelihood(contexts, targets, reduction="mean")
+    scorer._select_logits = False
+    full = scorer.log_likelihood(contexts, targets, reduction="mean")
+    # Reduced-precision batched matrix multiplication can differ slightly from
+    # single-example forwards; the float32 case checks alignment tightly.
+    tolerance = 1e-6 if dtype_name == "float32" else 3e-3
+    assert optimized == pytest.approx(expected, abs=tolerance)
+    assert full == pytest.approx(expected, abs=tolerance)
+    assert optimized == pytest.approx(full, abs=tolerance)
+
+
 def test_roberta_bertscore_with_local_byte_level_tokenizer(tmp_path):
     pytest.importorskip("bert_score")
     transformers = pytest.importorskip("transformers")
