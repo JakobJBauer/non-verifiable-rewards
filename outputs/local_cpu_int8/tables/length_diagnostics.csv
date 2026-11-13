@@ -1,0 +1,25 @@
+dataset,condition,reward,pairs,accuracy
+reddit_tldr,Preferred shorter,rouge_l,57,0.666666666667
+reddit_tldr,Preferred shorter,bertscore,57,0.59649122807
+reddit_tldr,Preferred shorter,bleurt,57,0.508771929825
+reddit_tldr,Preferred shorter,length,57,0
+reddit_tldr,Equal length,rouge_l,8,0.4375
+reddit_tldr,Equal length,bertscore,8,0.375
+reddit_tldr,Equal length,bleurt,8,0.5
+reddit_tldr,Equal length,length,8,0.5
+reddit_tldr,Preferred longer,rouge_l,63,0.52380952381
+reddit_tldr,Preferred longer,bertscore,63,0.507936507937
+reddit_tldr,Preferred longer,bleurt,63,0.619047619048
+reddit_tldr,Preferred longer,length,63,1
+litbench,Preferred shorter,rouge_l,56,0.446428571429
+litbench,Preferred shorter,bertscore,56,0.464285714286
+litbench,Preferred shorter,bleurt,56,0.321428571429
+litbench,Preferred shorter,length,56,0
+litbench,Equal length,rouge_l,1,1
+litbench,Equal length,bertscore,1,1
+litbench,Equal length,bleurt,1,1
+litbench,Equal length,length,1,0.5
+litbench,Preferred longer,rouge_l,71,0.605633802817
+litbench,Preferred longer,bertscore,71,0.619718309859
+litbench,Preferred longer,bleurt,71,0.591549295775
+litbench,Preferred longer,length,71,1

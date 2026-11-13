@@ -1,0 +1,5 @@
+reward,rouge_l,bertscore,bleurt,length
+rouge_l,1.0,0.6875,0.53125,0.578125
+bertscore,0.6875,1.0,0.671875,0.578125
+bleurt,0.53125,0.671875,1.0,0.625
+length,0.578125,0.578125,0.625,1.0

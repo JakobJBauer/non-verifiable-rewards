@@ -1,0 +1,52 @@
+{
+  "sources": {
+    "reddit_references": {
+      "path": "/home/jjb/phd/non-verifiable-rewards/artifacts/cache/data/tldr_valid.jsonl",
+      "sha256": "cb9e0bb4b1f3f719ea75f53c82462025d567bdc77053c466b2ab3573fdaa55be",
+      "description": "https://openaipublic.blob.core.windows.net/summarize-from-feedback/datasets/tldr_3_filtered/valid.jsonl"
+    },
+    "reddit_comparisons": {
+      "path": "/home/jjb/.cache/huggingface/datasets/parquet/default-241648de7effa47a/0.0.0/a859584b6747f312c02efa800dcc0a33038f602cb670b65dc6103d3f269c5565/parquet-validation.arrow",
+      "sha256": "f02bb149e6fa96fa82181a832f6744906cf288e5f6fb23db1ab4660ffecaaec2",
+      "description": "openai/summarize_from_feedback comparisons validation"
+    },
+    "litbench": {
+      "path": "/home/jjb/.cache/huggingface/datasets/SAA-Lab___lit_bench-train/default/0.0.0/079a36dd2d56185f76cf466a08a05dda146795dd/lit_bench-train-train.arrow",
+      "sha256": "f6a2ca15c81a0c4c6a775b78d8d84debbf3b97c725ac2130a07d80c3dbc19b54",
+      "description": "SAA-Lab/LitBench-Train train"
+    }
+  },
+  "sampling": "Uniform labeled pairs after filtering, fixed shuffled order",
+  "seed": 1729,
+  "reddit_tldr": {
+    "audit": {
+      "source_rows": 86086,
+      "excluded_empty_or_overlapping_texts": 37367,
+      "excluded_duplicate_labeled_pair": 7950,
+      "excluded_missing_reference": 2285,
+      "excluded_source_post_mismatch": 107,
+      "excluded_non_reddit": 2284,
+      "eligible_pairs": 36093,
+      "eligible_prompts": 5821
+    },
+    "pairs": 128,
+    "prompts": 128,
+    "sha256": "6af14d40d1352066e011edb3468b859887142af5086de09f19c00e1025464aa2"
+  },
+  "litbench": {
+    "audit": {
+      "source_prompts": 12419,
+      "prompts_with_at_least_three_stories": 6459,
+      "stories_with_multiple_observed_vote_counts": 24,
+      "source_rows": 43827,
+      "rows_with_at_least_three_stories": 37866,
+      "excluded_fewer_than_three_stories": 5961,
+      "excluded_duplicate_labeled_pair": 87,
+      "eligible_pairs": 37779,
+      "eligible_prompts": 6459
+    },
+    "pairs": 128,
+    "prompts": 125,
+    "sha256": "ce14ffbe93c245eec9f3775be4399110ba3093e16a41961f98d74a178003be83"
+  }
+}

@@ -1,0 +1,8 @@
+dataset,backend,pairs,scoring_seconds,seconds_per_candidate
+litbench,bertscore,128,69.21445437,0.270368962383
+litbench,bleurt,128,54.251206491,0.211918775355
+litbench,lexical,128,33.321095643,0.130160529855
+reddit_tldr,bertscore,128,15.7939728111,0.0616952062932
+reddit_tldr,bleurt,128,54.875835492,0.214358732391
+reddit_tldr,lexical,128,2.53143877606,0.00988843271898
+reddit_tldr,lm,57,707.201737097,6.20352400962

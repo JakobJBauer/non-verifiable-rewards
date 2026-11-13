@@ -1,0 +1,90 @@
+2026-11-13 01:32:20,634 INFO bleurt reddit_tldr: 128 pending, 0 already recorded
+2026-11-13 01:32:29,195 INFO Reading checkpoint /home/jjb/phd/non-verifiable-rewards/artifacts/cache/bleurt/BLEURT-20-D3.
+2026-11-13 01:32:29,196 INFO Config file found, reading.
+2026-11-13 01:32:29,197 INFO Will load checkpoint BLEURT-20-D3
+2026-11-13 01:32:29,198 INFO Loads full paths and checks that files exists.
+2026-11-13 01:32:29,198 INFO ... name:BLEURT-20-D3
+2026-11-13 01:32:29,198 INFO ... bert_config_file:bert_config.json
+2026-11-13 01:32:29,198 INFO ... max_seq_length:512
+2026-11-13 01:32:29,198 INFO ... vocab_file:None
+2026-11-13 01:32:29,198 INFO ... do_lower_case:None
+2026-11-13 01:32:29,199 INFO ... sp_model:sent_piece
+2026-11-13 01:32:29,199 INFO ... dynamic_seq_length:True
+2026-11-13 01:32:29,199 INFO Creating BLEURT scorer.
+2026-11-13 01:32:29,199 INFO Creating SentencePiece tokenizer.
+2026-11-13 01:32:29,199 INFO Creating SentencePiece tokenizer.
+2026-11-13 01:32:29,199 INFO Will load model: /home/jjb/phd/non-verifiable-rewards/artifacts/cache/bleurt/BLEURT-20-D3/sent_piece.model.
+2026-11-13 01:32:29,562 INFO SentencePiece tokenizer created.
+2026-11-13 01:32:29,562 INFO Creating Eager Mode predictor.
+2026-11-13 01:32:29,563 INFO Loading model.
+2026-11-13 01:32:30,921 INFO Fingerprint not found. Saved model loading will continue.
+2026-11-13 01:32:30,922 INFO path_and_singleprint metric could not be logged. Saved model loading will continue.
+2026-11-13 01:32:30,924 INFO BLEURT initialized.
+2026-11-13 01:32:31,682 INFO bleurt model load/warmup took 12.6s
+2026-11-13 01:32:32,170 INFO bleurt reddit_tldr: 1/128 pending pairs done; latest 0.48s; errors=0
+2026-11-13 01:32:34,053 INFO bleurt reddit_tldr: 5/128 pending pairs done; latest 0.46s; errors=0
+2026-11-13 01:32:35,687 INFO bleurt reddit_tldr: 9/128 pending pairs done; latest 0.55s; errors=0
+2026-11-13 01:32:37,813 INFO bleurt reddit_tldr: 13/128 pending pairs done; latest 0.54s; errors=0
+2026-11-13 01:32:39,712 INFO bleurt reddit_tldr: 17/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:32:40,981 INFO bleurt reddit_tldr: 21/128 pending pairs done; latest 0.46s; errors=0
+2026-11-13 01:32:42,864 INFO bleurt reddit_tldr: 25/128 pending pairs done; latest 0.46s; errors=0
+2026-11-13 01:32:44,733 INFO bleurt reddit_tldr: 29/128 pending pairs done; latest 0.46s; errors=0
+2026-11-13 01:32:45,992 INFO bleurt reddit_tldr: 33/128 pending pairs done; latest 0.44s; errors=0
+2026-11-13 01:32:47,901 INFO bleurt reddit_tldr: 37/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:32:49,563 INFO bleurt reddit_tldr: 41/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:32:50,703 INFO bleurt reddit_tldr: 45/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:32:52,329 INFO bleurt reddit_tldr: 49/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:32:54,060 INFO bleurt reddit_tldr: 53/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:32:55,729 INFO bleurt reddit_tldr: 57/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:32:56,899 INFO bleurt reddit_tldr: 61/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:32:58,571 INFO bleurt reddit_tldr: 65/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:00,270 INFO bleurt reddit_tldr: 69/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:01,419 INFO bleurt reddit_tldr: 73/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:03,154 INFO bleurt reddit_tldr: 77/128 pending pairs done; latest 0.47s; errors=0
+2026-11-13 01:33:04,833 INFO bleurt reddit_tldr: 81/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:33:05,967 INFO bleurt reddit_tldr: 85/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:07,601 INFO bleurt reddit_tldr: 89/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:09,200 INFO bleurt reddit_tldr: 93/128 pending pairs done; latest 0.38s; errors=0
+2026-11-13 01:33:10,864 INFO bleurt reddit_tldr: 97/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:11,979 INFO bleurt reddit_tldr: 101/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:13,607 INFO bleurt reddit_tldr: 105/128 pending pairs done; latest 0.38s; errors=0
+2026-11-13 01:33:15,285 INFO bleurt reddit_tldr: 109/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:16,457 INFO bleurt reddit_tldr: 113/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:18,101 INFO bleurt reddit_tldr: 117/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:19,711 INFO bleurt reddit_tldr: 121/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:20,936 INFO bleurt reddit_tldr: 125/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:22,218 INFO bleurt reddit_tldr: 128/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:33:22,235 INFO bleurt litbench: 128 pending, 0 already recorded
+2026-11-13 01:33:22,658 INFO bleurt litbench: 1/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:24,323 INFO bleurt litbench: 5/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:26,016 INFO bleurt litbench: 9/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:27,238 INFO bleurt litbench: 13/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:29,028 INFO bleurt litbench: 17/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:33:30,720 INFO bleurt litbench: 21/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:31,887 INFO bleurt litbench: 25/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:33,600 INFO bleurt litbench: 29/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:33:35,256 INFO bleurt litbench: 33/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:36,462 INFO bleurt litbench: 37/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:33:38,239 INFO bleurt litbench: 41/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:39,975 INFO bleurt litbench: 45/128 pending pairs done; latest 0.45s; errors=0
+2026-11-13 01:33:41,422 INFO bleurt litbench: 49/128 pending pairs done; latest 0.48s; errors=0
+2026-11-13 01:33:43,292 INFO bleurt litbench: 53/128 pending pairs done; latest 0.46s; errors=0
+2026-11-13 01:33:45,201 INFO bleurt litbench: 57/128 pending pairs done; latest 0.47s; errors=0
+2026-11-13 01:33:46,360 INFO bleurt litbench: 61/128 pending pairs done; latest 0.39s; errors=0
+2026-11-13 01:33:47,974 INFO bleurt litbench: 65/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:49,623 INFO bleurt litbench: 69/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:33:50,822 INFO bleurt litbench: 73/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:33:52,486 INFO bleurt litbench: 77/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:33:54,270 INFO bleurt litbench: 81/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:33:55,953 INFO bleurt litbench: 85/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:33:57,159 INFO bleurt litbench: 89/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:33:58,826 INFO bleurt litbench: 93/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:34:00,556 INFO bleurt litbench: 97/128 pending pairs done; latest 0.40s; errors=0
+2026-11-13 01:34:01,740 INFO bleurt litbench: 101/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:34:03,437 INFO bleurt litbench: 105/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:34:05,095 INFO bleurt litbench: 109/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:34:06,296 INFO bleurt litbench: 113/128 pending pairs done; latest 0.42s; errors=0
+2026-11-13 01:34:07,989 INFO bleurt litbench: 117/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:34:09,677 INFO bleurt litbench: 121/128 pending pairs done; latest 0.41s; errors=0
+2026-11-13 01:34:10,888 INFO bleurt litbench: 125/128 pending pairs done; latest 0.43s; errors=0
+2026-11-13 01:34:12,134 INFO bleurt litbench: 128/128 pending pairs done; latest 0.39s; errors=0

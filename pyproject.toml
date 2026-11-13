@@ -1,0 +1,48 @@
+[project]
+name = "non-verifiable-rewards"
+version = "0.1.0"
+description = "Offline comparison of rewards for non-verifiable text generation"
+readme = "README.md"
+authors = [
+    { name = "Jakob Johannes Bauer", email = "bauerjakobjohannes@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=5.2.0",
+    "rouge-score>=0.1.2",
+]
+
+[project.optional-dependencies]
+benchmark = [
+    "matplotlib>=3.9",
+    "scipy>=1.14",
+    "pandas>=2.2",
+]
+bertscore = [
+    "bert-score>=0.3.13,<0.4",
+    "transformers>=5,<6",
+]
+lm = [
+    "torch>=2.6",
+    "transformers>=5,<6",
+    "accelerate>=1.6",
+]
+bleurt = [
+    "bleurt @ git+https://github.com/google-research/bleurt.git@cebe7e6f996b40910cfaa520a63db47807e3bf5c",
+]
+
+[project.scripts]
+non-verifiable-rewards = "non_verifiable_rewards:main"
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

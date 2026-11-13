@@ -1,0 +1,15 @@
+dataset,reward,expected_pairs,complete_pairs,common_pairs,included_in_primary_benchmark,missing_candidates,failed_candidates,preprocessing_truncated_candidates,native_truncated_candidates,reference_prefix_overlap_candidates
+reddit_tldr,rouge_l,128,128,128,True,0,0,0,0,0
+reddit_tldr,bertscore,128,128,128,True,0,0,0,0,0
+reddit_tldr,bleurt,128,128,128,True,0,0,0,0,0
+reddit_tldr,self_certainty,128,57,0,False,142,0,54,0,0
+reddit_tldr,reference_likelihood,128,57,0,False,142,0,54,0,0
+reddit_tldr,vr_cli,128,57,0,False,142,0,54,0,0
+reddit_tldr,length,128,128,128,True,0,0,0,0,0
+litbench,rouge_l,128,128,128,True,0,0,0,0,0
+litbench,bertscore,128,128,128,True,0,0,255,0,0
+litbench,bleurt,128,128,128,True,0,0,255,0,0
+litbench,self_certainty,128,0,0,False,256,0,0,0,0
+litbench,reference_likelihood,128,0,0,False,256,0,0,0,0
+litbench,vr_cli,128,0,0,False,256,0,0,0,0
+litbench,length,128,128,128,True,0,0,0,0,0

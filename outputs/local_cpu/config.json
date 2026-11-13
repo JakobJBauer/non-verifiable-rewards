@@ -1,0 +1,35 @@
+{
+  "name": "Local CPU pilot",
+  "run_dir": "outputs/local_cpu",
+  "cache_dir": "artifacts/cache",
+  "pilot": true,
+  "device": "cpu",
+  "dtype": "float32",
+  "threads": 4,
+  "seed": 1729,
+  "pairs_per_dataset": 128,
+  "bootstrap_samples": 2000,
+  "batch_size": 2,
+  "lm_batch_size": 1,
+  "max_context_tokens": 2048,
+  "max_prompt_tokens": 384,
+  "max_candidate_tokens": 192,
+  "max_reference_tokens": 192,
+  "allow_metric_truncation": true,
+  "tie_tolerance": 1e-07,
+  "models": {
+    "lm": {
+      "id": "Qwen/Qwen3-0.6B",
+      "revision": "c1899de289a04d12100db370d81485cdf75e47ca"
+    },
+    "bertscore": {
+      "id": "distilbert/distilbert-base-uncased",
+      "revision": "main",
+      "num_layers": 5
+    },
+    "bleurt": {
+      "name": "BLEURT-20-D3",
+      "url": "https://storage.googleapis.com/bleurt-oss-21/BLEURT-20-D3.zip"
+    }
+  }
+}

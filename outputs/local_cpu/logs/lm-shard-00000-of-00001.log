@@ -1,0 +1,6 @@
+2026-11-13 01:22:45,014 INFO lm reddit_tldr: 128 pending, 0 already recorded
+2026-11-13 01:23:06,815 INFO lm model load/warmup took 16.6s
+2026-11-13 01:23:20,734 INFO lm reddit_tldr: 1/128 pending pairs done; latest 22.60s; errors=0
+2026-11-13 01:24:45,218 INFO lm reddit_tldr: 5/128 pending pairs done; latest 25.16s; errors=0
+2026-11-13 01:25:47,987 INFO lm reddit_tldr: 9/128 pending pairs done; latest 19.95s; errors=0
+2026-11-13 01:27:14,053 INFO lm reddit_tldr: 13/128 pending pairs done; latest 25.94s; errors=0

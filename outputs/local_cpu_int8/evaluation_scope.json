@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-11-13T01:40:03.259945+00:00",
+  "benchmark_rewards": [
+    "rouge_l",
+    "bertscore",
+    "bleurt",
+    "length"
+  ],
+  "reason": "User requested stopping slow local Qwen evaluation after a single-datapoint smoke check. Complete LM benchmarks are deferred to the GPU cluster.",
+  "lm_smoke_pair_id": "a290f2fbbe774d5b0d2710ba",
+  "retained_partial_lm_pairs": 57,
+  "partial_lm_used_in_accuracy_figures": false
+}

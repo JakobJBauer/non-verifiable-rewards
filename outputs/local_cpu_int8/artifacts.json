@@ -1,0 +1,333 @@
+{
+  "generated_at": "2026-11-13T01:47:31.597011+00:00",
+  "files": {
+    "config.json": {
+      "bytes": 892,
+      "sha256": "dc6e7745c14e5fb8a9c6e7c46bda9b768b958a21d5db2dd942a4a388fb5832c2"
+    },
+    "cpu_thread_profile.json": {
+      "bytes": 279,
+      "sha256": "0a8b708326a168721e6ae8d96af6a2c7c55742d09d77a3927c8fb505eab65ec4"
+    },
+    "data/litbench.jsonl": {
+      "bytes": 1335772,
+      "sha256": "ce14ffbe93c245eec9f3775be4399110ba3093e16a41961f98d74a178003be83"
+    },
+    "data/litbench.parquet": {
+      "bytes": 835265,
+      "sha256": "03e351550e2d29395f50b79c71ca3a94d510e07ee72ed6c9342402177c7b8e78"
+    },
+    "data/reddit_tldr.jsonl": {
+      "bytes": 311679,
+      "sha256": "6af14d40d1352066e011edb3468b859887142af5086de09f19c00e1025464aa2"
+    },
+    "data/reddit_tldr.parquet": {
+      "bytes": 177606,
+      "sha256": "e7a71581fd856a58169d36332e6176a558d39a9b0c98b69bd05cf2c24ee04e58"
+    },
+    "data_manifest.json": {
+      "bytes": 2165,
+      "sha256": "36dbfcfcf770cb6c126ea823c566f584e930d16676603d21d02c812fa3c24b47"
+    },
+    "environment.json": {
+      "bytes": 3446,
+      "sha256": "775842a636ced9aae0f46bfa0c1be82228ed2ea5208d9509ba7fb4186a44c77d"
+    },
+    "evaluation_scope.json": {
+      "bytes": 437,
+      "sha256": "859a8d8f8b7aac43f05ed330da7cfc96edb291c3a13ee634f76c985a8db3ab0e"
+    },
+    "figures/accuracy_vs_length.pdf": {
+      "bytes": 29317,
+      "sha256": "66c89db7814f405c39db8ba260b037dd990cc263e06d96a3ebff34c58e68a784"
+    },
+    "figures/accuracy_vs_length.png": {
+      "bytes": 144642,
+      "sha256": "87f39776f8d6bf58fe38101fa50f5bbb1001342d381d975db6563293eb0be7b4"
+    },
+    "figures/decision_agreement.pdf": {
+      "bytes": 32825,
+      "sha256": "c6d94fd4fea2df70a1534c72460ec0feb1925e2454581ea0f3f0cb63f347c6b1"
+    },
+    "figures/decision_agreement.png": {
+      "bytes": 186249,
+      "sha256": "f23a52dafd1bad3ac862e18a71e7fffb3a9228fcd6db0aa61d47482356ecf2c9"
+    },
+    "figures/input_coverage.pdf": {
+      "bytes": 23816,
+      "sha256": "24d20a80bd7be69b014557fe5999d3bf7e242097f2d2054161f71d4189fbd9de"
+    },
+    "figures/input_coverage.png": {
+      "bytes": 141611,
+      "sha256": "207c7e4e3ebca2962d764dfed0156dcc65ad10a9f01e79412408819c1b13807c"
+    },
+    "figures/length_diagnostics.pdf": {
+      "bytes": 25016,
+      "sha256": "7691086a87f3a607b09540fdd9ea2d5e4726c0aa47665e094f3bda8ff094a832"
+    },
+    "figures/length_diagnostics.png": {
+      "bytes": 140305,
+      "sha256": "5b9d81ed88c330e668f28f3cfcfcd2c6c82e412de495127d495cee72280f3fa3"
+    },
+    "figures/pairwise_accuracy.pdf": {
+      "bytes": 27048,
+      "sha256": "f9b21e32609d83f2e89206980f9739801f84b54b31471ec0ecc46d345be07c7d"
+    },
+    "figures/pairwise_accuracy.png": {
+      "bytes": 158420,
+      "sha256": "0376eff4f5df5923514827187593dc20fa30a87cce3c6b4c0fd7b9162942532f"
+    },
+    "figures/qwen_smoke_check.pdf": {
+      "bytes": 31254,
+      "sha256": "2a41b8bbfedc4b4975422150ef31f3654d4f5fcbd7a6ab0c03b3f7156da2b1fd"
+    },
+    "figures/qwen_smoke_check.png": {
+      "bytes": 168150,
+      "sha256": "9d0138f9139f312ea8cb3d0b53d27062fbc2213e88860c4947864a70cb239996"
+    },
+    "figures/reward_correlations.pdf": {
+      "bytes": 36857,
+      "sha256": "27dafe50911f1e8c8eecf030740701d376636ad30407cbe20821329110ac2860"
+    },
+    "figures/reward_correlations.png": {
+      "bytes": 188656,
+      "sha256": "224d791cb8d6e33a1b1bab924ac86d9c25bc0a599d94478941ed61f112c54c95"
+    },
+    "figures/runtime.pdf": {
+      "bytes": 27283,
+      "sha256": "d150c748cb580a674194860de41a36ee396e266c7f24683f5aba72cc0fe4f7bf"
+    },
+    "figures/runtime.png": {
+      "bytes": 101149,
+      "sha256": "d8e01eb7fe6ffd774be45afa5ed80b7a4fb2819134b1e8395fd30c261456c9bc"
+    },
+    "logs/bertscore-shard-00000-of-00001.log": {
+      "bytes": 6875,
+      "sha256": "f747613b210f35c96648ff8a3eb2c4fb19ab1dbfa8b8ddfd4bb7e44dfe0896f6"
+    },
+    "logs/bleurt-shard-00000-of-00001.log": {
+      "bytes": 8099,
+      "sha256": "8b2d440627e5d0b89b57a23de5f4b83b5b787115867a386c7c0821e74a9b2aba"
+    },
+    "logs/lexical-shard-00000-of-00001.log": {
+      "bytes": 6791,
+      "sha256": "8ed2aab9649f13136fd01c5c88be6b1a674011d9907259e5912dd8a38a5b0625"
+    },
+    "logs/lm-shard-00000-of-00001.log": {
+      "bytes": 1574,
+      "sha256": "898728c664eacf8c6b7d06e1658090d690fa37d69083c48faefed47f97cc4cff"
+    },
+    "models.json": {
+      "bytes": 864,
+      "sha256": "d45b7341ab441a614c0e858d8114a7228a7ce49d4d2a2c03d4116bcb12ca6d23"
+    },
+    "preprocessing.json": {
+      "bytes": 467,
+      "sha256": "1a9ed6aefc48f4d442a922f435a5fba400055fd9cdad7bbea96579b08c598af5"
+    },
+    "qwen_smoke_check.json": {
+      "bytes": 10276,
+      "sha256": "e0489dd92451c0159b8887e3eb82bdab296d0e84ca84bc5f6849450f47c89049"
+    },
+    "report.html": {
+      "bytes": 1717523,
+      "sha256": "ba2a2aa6ecd5c9a4a0f0fa54d0cde45ba683fbe37662b3f1ba27b7af23eec816"
+    },
+    "report.md": {
+      "bytes": 4744,
+      "sha256": "f5bd423542b24f38568d0310f1b8d6b36fa52a65dcda6fbada7d251f98c74142"
+    },
+    "scored_text/litbench.jsonl": {
+      "bytes": 490691,
+      "sha256": "1221e61a528ca86012bde3a342164fe8079a632d2cc5b03b0dc26e4077dc378c"
+    },
+    "scored_text/reddit_tldr.jsonl": {
+      "bytes": 369251,
+      "sha256": "53909478885e186693602a585a7e8ae4d4c0f9a9abce54d759d29382489f4aee"
+    },
+    "scores/bertscore/litbench-shard-00000-of-00001.jsonl": {
+      "bytes": 170234,
+      "sha256": "1035ee89ffd19c67bbdb52c6e6f3df4b932d8f69470d220d22a0e2177ca5724c"
+    },
+    "scores/bertscore/reddit_tldr-shard-00000-of-00001.jsonl": {
+      "bytes": 165721,
+      "sha256": "b952f06a461fd2821ff9dce61962f2c83436ea453b151386ab14125c961ab4d9"
+    },
+    "scores/bertscore/shard-00000-of-00001.baselines.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scores/bertscore/shard-00000-of-00001.invocation-1794533538229537518.json": {
+      "bytes": 4312,
+      "sha256": "21b8a07d3f086b7caa8c753cab0759ccb1b3cb77da802e133f31d301ea27e12b"
+    },
+    "scores/bertscore/shard-00000-of-00001.metadata.json": {
+      "bytes": 4312,
+      "sha256": "21b8a07d3f086b7caa8c753cab0759ccb1b3cb77da802e133f31d301ea27e12b"
+    },
+    "scores/bleurt/litbench-shard-00000-of-00001.jsonl": {
+      "bytes": 169623,
+      "sha256": "d1e0c105362e33f7b29581a08ebb8b4998056910386ed54f97dc176c1b180ea6"
+    },
+    "scores/bleurt/reddit_tldr-shard-00000-of-00001.jsonl": {
+      "bytes": 165036,
+      "sha256": "e59b12dbb59de1ad71b30d48dc9064d1cd7f4927439eedc883b967ce1c787811"
+    },
+    "scores/bleurt/shard-00000-of-00001.baselines.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scores/bleurt/shard-00000-of-00001.invocation-1794533652136423109.json": {
+      "bytes": 4309,
+      "sha256": "533ed081ae96be12dada29a61b8c5373dd738b10d0bdf0a7600ea6404661d962"
+    },
+    "scores/bleurt/shard-00000-of-00001.metadata.json": {
+      "bytes": 4309,
+      "sha256": "533ed081ae96be12dada29a61b8c5373dd738b10d0bdf0a7600ea6404661d962"
+    },
+    "scores/lexical/litbench-shard-00000-of-00001.jsonl": {
+      "bytes": 267144,
+      "sha256": "0ce1a99bf0f9d8fa2c7415839a0d3f9454af4b4c38ac7bc21d2f0922eccf21fd"
+    },
+    "scores/lexical/reddit_tldr-shard-00000-of-00001.jsonl": {
+      "bytes": 257870,
+      "sha256": "53a3358edb94d3de1d1b8dcbd01b4c25d872f06512685ac719c8a2d32c5d9e13"
+    },
+    "scores/lexical/shard-00000-of-00001.baselines.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scores/lexical/shard-00000-of-00001.invocation-1794533451097473286.json": {
+      "bytes": 4316,
+      "sha256": "4c344e5ef553e8b2798b54b569d7fa68c8745a1042408b690fa16179df523adc"
+    },
+    "scores/lexical/shard-00000-of-00001.metadata.json": {
+      "bytes": 4316,
+      "sha256": "4c344e5ef553e8b2798b54b569d7fa68c8745a1042408b690fa16179df523adc"
+    },
+    "scores/lm/reddit_tldr-shard-00000-of-00001.jsonl": {
+      "bytes": 292177,
+      "sha256": "f33ca13274260443b8f897b400bf4f387abaf1f4e41be0e87e7486916b8950db"
+    },
+    "scores/lm/shard-00000-of-00001.baselines.jsonl": {
+      "bytes": 8716,
+      "sha256": "c4d480e14e4e4d49e1c21daec450306148b73b6fd9c34c532e558098f84481fa"
+    },
+    "scores/lm/shard-00000-of-00001.metadata.json": {
+      "bytes": 4053,
+      "sha256": "7e0dae48a5167ac80898bc7c786f7e6c0faa02ff52c5be7dacb81743f6ca9ae0"
+    },
+    "source_at_creation.tar.gz": {
+      "bytes": 238481,
+      "sha256": "f209efd53fb015e3c5d9ee92feeaf20127a82ea861cc5ea5f0f571ca88dcc6b0"
+    },
+    "source_at_report.tar.gz": {
+      "bytes": 242440,
+      "sha256": "4b5a1eb6dc0669a2bcc29af0582387673b77f5ee7a7a7ffdbdd850d5233027b8"
+    },
+    "tables/bootstrap_accuracy.csv": {
+      "bytes": 239772,
+      "sha256": "166b7345413bac7554b3f3f3491cdd37583ebac42a4ebd36fc22dc248faedcb5"
+    },
+    "tables/bootstrap_accuracy.parquet": {
+      "bytes": 40571,
+      "sha256": "8126aa607df4a71fffe5fe4b92f860224281fe19d0980d301b2e24829b21834f"
+    },
+    "tables/candidate_scores.csv": {
+      "bytes": 455841,
+      "sha256": "abf5fed0f9b979b1438e2c2158b372e8f087353d58cf7053ba002a426d10250d"
+    },
+    "tables/candidate_scores.parquet": {
+      "bytes": 85094,
+      "sha256": "e3abc6f464c5f0b4db158a9e05d1fead32ac6f02f4c9d4b6b110fafa3084163b"
+    },
+    "tables/coverage.csv": {
+      "bytes": 903,
+      "sha256": "f8a675e68a9a701378f6c6e8bbec12b2f90b72077c29f66183278d4eb0e128ad"
+    },
+    "tables/coverage.parquet": {
+      "bytes": 7808,
+      "sha256": "3f43edeabfabcc07d3c02f7e3135ef274f3e7b4731449989358f0e0074e96868"
+    },
+    "tables/disagreement_examples.jsonl": {
+      "bytes": 72525,
+      "sha256": "4f22fd29d70f1b3930c7edf7493e7ea1421f13b5a25875c579ffa0e72d243b51"
+    },
+    "tables/failures.csv": {
+      "bytes": 590,
+      "sha256": "4864924ef777396cd4b4d66b03cf5d38e3223a5ae8063cf885ca3209c6e73dd4"
+    },
+    "tables/failures.parquet": {
+      "bytes": 14761,
+      "sha256": "2eb0db79939c868a88fa191ff2f9df4b92c047f417ce88e9e99776ee8944d723"
+    },
+    "tables/length_diagnostics.csv": {
+      "bytes": 1149,
+      "sha256": "dfa314c0b80922231383e25aff7e746c405a50fb862ec0e0d0c8bfd74b34cdcc"
+    },
+    "tables/length_diagnostics.parquet": {
+      "bytes": 3603,
+      "sha256": "548c8bb3b865d07ee6e9a3f985ee526f3d63ddccaca018ca90ff417e4cc5a04e"
+    },
+    "tables/litbench_decision_agreement.csv": {
+      "bytes": 183,
+      "sha256": "45710796e585cade8481348a69eed9d732c23a7ee6bd8c25c571c19780cd2396"
+    },
+    "tables/litbench_spearman.csv": {
+      "bytes": 327,
+      "sha256": "647692d160e9f7e2213be7afd663a7b5329df26b4976ff2319919e41b3f19d90"
+    },
+    "tables/pair_margins.csv": {
+      "bytes": 31080,
+      "sha256": "13b05d627d954aba2d4a94d1a26804d7b71a86137dea165d0c62f453fafc5aba"
+    },
+    "tables/pair_margins.parquet": {
+      "bytes": 28435,
+      "sha256": "4bfc4d7de7dfa00f2decc701bc7c26bdecf150a699e13a5a94687294c679fd2c"
+    },
+    "tables/pair_timings.csv": {
+      "bytes": 53794,
+      "sha256": "31f402cf323f2151bbd09f9f6942aa50bad7da82d167802c45c3791be880db93"
+    },
+    "tables/pair_timings.parquet": {
+      "bytes": 20694,
+      "sha256": "b71d1452cbe31cf34a9d56caab854c3ce749d278759cbc884399bdb5db56a270"
+    },
+    "tables/reddit_tldr_decision_agreement.csv": {
+      "bytes": 199,
+      "sha256": "ec921fec69b75c24ff3bcd8af243ef372ec525cb7de45917ecc5467b1565af2e"
+    },
+    "tables/reddit_tldr_spearman.csv": {
+      "bytes": 321,
+      "sha256": "00bfc7efecda94081be7b7a721e49d58b8be53683266fed94874ba83c35f09f0"
+    },
+    "tables/runtime.csv": {
+      "bytes": 415,
+      "sha256": "e4da91fbd01646d8b1fcb3a6c3832c66f2c0d30ef2dda361f4c2fab99c2ad8af"
+    },
+    "tables/runtime.parquet": {
+      "bytes": 3678,
+      "sha256": "88e9a95981babe17af8eb0db8aa1e4db39869340b432117076407af25e92e75f"
+    },
+    "tables/summary.csv": {
+      "bytes": 859,
+      "sha256": "1b2ad92950d6f5a5c26c01d9606c91b12c5c46db59793e5166ff0e1d11a4ccbe"
+    },
+    "tables/summary.parquet": {
+      "bytes": 7159,
+      "sha256": "543581ceb780ece30810688118a97d63435ad7e63a664cec7a07575a8a52ec1f"
+    },
+    "tables/summary.tex": {
+      "bytes": 851,
+      "sha256": "f91e4494fdaf16604b0085aa21e22993e0354045aff33a635d451f33943063b0"
+    },
+    "tables/workers.csv": {
+      "bytes": 563,
+      "sha256": "b5abfcc77cf391fad92aca21d25e2accd434101709dba72dbcc054491f6db194"
+    },
+    "tables/workers.parquet": {
+      "bytes": 7582,
+      "sha256": "8c836859390066e4b7633c00532f3e191fbbe444e5583f89917099fd877cbb3a"
+    }
+  }
+}
