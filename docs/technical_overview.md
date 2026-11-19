@@ -1,9 +1,9 @@
 # Technical report: offline comparison of non-verifiable rewards
 
 This report describes the current source and the completed 13 November 2026
-Qwen3-4B experiment. The current scoring-source hash matches the hash recorded
-by the GPU workers. The separate setup script has since been expanded to
-consolidate installation and recovery commands; that does not change scoring.
+Qwen3-4B experiment. The completed run used thresholded VR-CLI; current scoring
+returns continuous perplexity improvement. The scoring-source hash therefore
+differs from the recorded GPU workers, and saved results remain historical.
 
 The project evaluates **six rewards plus a length baseline** on pre-existing
 preference pairs. It performs inference, comparison, and statistical analysis.
@@ -27,7 +27,7 @@ rule for measuring their agreement; that is not implemented here.
 | [`experiments/io.py`](../src/non_verifiable_rewards/experiments/io.py) | Configuration, hashes, source snapshots, atomic files, pair journals |
 | [`experiments/analysis.py`](../src/non_verifiable_rewards/experiments/analysis.py) | Preference accuracy, uncertainty, correlations, coverage, exports |
 | [`experiments/report.py`](../src/non_verifiable_rewards/experiments/report.py) | Figures, HTML/Markdown reports, LaTeX summary, artifact checksums |
-| [`experiments/supplementary.py`](../src/non_verifiable_rewards/experiments/supplementary.py) | All paired comparisons, pilot overlap, truncation/weighting/threshold diagnostics |
+| [`experiments/supplementary.py`](../src/non_verifiable_rewards/experiments/supplementary.py) | All paired comparisons, pilot overlap, truncation/weighting/tie diagnostics |
 | [`experiments/smoke.py`](../src/non_verifiable_rewards/experiments/smoke.py) | One-pair LM execution checks and the CPU pilot's restricted reporting scope |
 | [`experiments/cli.py`](../src/non_verifiable_rewards/experiments/cli.py) | Command-line entry point and stage orchestration |
 | `configs/`, `scripts/`, `requirements/` | Experiment settings, VM/Slurm launchers, recorded GPU dependencies |
@@ -405,7 +405,7 @@ traces, assess plan quality separately, or train a policy. Policy and frozen
 scorers coincide here because there is one unchanged checkpoint and one
 inference configuration.
 
-### VR-CLI baseline, transformation, and thresholds
+### VR-CLI baseline and continuous transformation
 
 The no-candidate baseline uses the same prompt/chat template without the
 candidate section:
@@ -422,10 +422,13 @@ I=100\frac{\exp(-L_0)-\exp(-L_y)}{\exp(-L_0)}
  =100\left[1-\exp(L_0-L_y)\right].
 \]
 
-The code evaluates `-100 * math.expm1(L_0 - L_y)` for numerical stability.
-It does not exponentiate summed sequence log probabilities. An extreme
-regression that overflows the exponential is treated as negative infinity
-for thresholding; its diagnostic value is saved as null with an overflow flag.
+The code evaluates `-100 * math.expm1(L_0 - L_y)` for numerical stability and
+returns `I` directly as the reward. It does not exponentiate summed sequence
+log probabilities, clip negative improvements, or apply thresholds. Extreme
+regressions that overflow the calculation are rejected as nonfinite scores;
+the worker records the pair as failed rather than assigning a tied floor.
+
+The completed 13 November run instead used the published threshold schedule:
 
 | Perplexity improvement `I` | VR-CLI reward |
 | --- | ---: |
@@ -434,16 +437,23 @@ for thresholding; its diagnostic value is saved as null with an overflow flag.
 | `1 <= I < 2` | 0.9 |
 | `I >= 2` | 1 |
 
-The cutoffs are **percent units**: `0.05` means 0.05%, not 5%. Threshold
-equality enters the higher bucket using `bisect_right`. This implements the
-paper's thresholded perplexity-improvement variant, not a clipped log-probability
-difference. Custom thresholds and nondecreasing levels are supported.
+The historical cutoffs are **percent units**: `0.05` means 0.05%, not 5%.
+Current `VRCLIReward` no longer accepts `thresholds` or `levels`. It is an
+explicit unthresholded adaptation of the paper's reward.
 
-Within a pair, both candidates share `L_0`, so thresholding is a monotone
-transformation of their raw likelihoods. It can create ties but cannot reverse
-their mathematical ordering. The supplementary analysis checks for actual
-ranking reversals; the completed run has none. Absolute tie tolerances can
-also classify extremely small continuous margins as ties.
+Within a pair, both candidates share `L_0`, so continuous VR-CLI is strictly
+increasing in their raw likelihoods. Its mathematical pairwise ordering is
+identical to reference likelihood, although its margins and cross-pair scale
+differ. Floating-point precision and absolute tie tolerances can still create
+ties. Recalculation from the frozen run's likelihoods removes all threshold
+ties: Reddit accuracy is 44.25% and LitBench accuracy is 49.90%, matching
+reference likelihood. Original journals and reports retain the old results.
+
+New worker statistics record `vr_cli_variant = "continuous"`. Analysis treats
+unmarked historical scores as thresholded and rejects mixed or unknown variants.
+Reports identify the variant and show improvement distributions and pairwise
+margins. A new scoring run needs a separate run directory; the worker identity
+check prevents resuming old shards with changed scoring code.
 
 ### Shared computation and caching
 
@@ -457,7 +467,7 @@ For one pair, at the configured LM batch size of one, the work is normally:
 2. Two reference-under-prompt-and-candidate sequences.
 3. Two candidate-under-prompt sequences for self-certainty.
 
-VR-CLI's thresholding adds no further model call. Baselines are persisted
+VR-CLI's transformation adds no further model call. Baselines are persisted
 per worker shard and keyed by a digest of the exact no-candidate context and
 reference text. Worker identity checks bind that cache to the run's model and
 scoring settings. The GPU run saved 3,227 unique baseline evaluations across
@@ -614,8 +624,10 @@ prompt and then across prompts; it addresses a different weighting choice.
 - Constant rewards have undefined correlation, recorded/displayed as such.
 - Length diagnostics separate pairs where the preferred output is shorter,
   equal in word count, or longer.
-- VR-CLI diagnostics examine continuous improvements, reward levels, ties,
-  and loss of correct/incorrect raw decisions through thresholding.
+- VR-CLI diagnostics examine continuous improvements, score margins, ties,
+  and loss of correct/incorrect raw decisions. The information-loss table
+  records the variant with `vr_cli_accuracy` and `vr_cli_tie_rate`; historical
+  table exports used `thresholded_accuracy` and `thresholded_tie_rate`.
 - Qualitative examples select up to six pairs per dataset with the most evenly
   split correct/incorrect non-length decisions. Stable pair IDs break ties.
   These are deliberately selected disagreements, not a random qualitative sample.
@@ -741,7 +753,7 @@ The tests use analytic distributions and tiny local models to check causal
 shifting, target-only masking, padding, BOS/EOS behavior, low-precision
 reductions, the direction of the self-certainty KL, and selective-logit
 projection. Other tests cover known ROUGE results, BLEURT/BERTScore calls,
-reference selection, seeded nesting, VR-CLI thresholds/overflow/baseline
+reference selection, seeded nesting, continuous VR-CLI ordering/overflow/baseline
 deduplication, journal recovery, reporting scope, and overlapping/missing shards.
 
 During the GPU run the main environment recorded 60 passed / 1 skipped, and

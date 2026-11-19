@@ -113,10 +113,24 @@ def export_table(frame, path):
     frame.to_parquet(path.with_suffix(".parquet"), index=False)
 
 
+def vrcli_variant(scores):
+    """Identify the reward definition; unmarked historical runs used thresholds."""
+    rows = scores[(scores.reward == "vr_cli") & (scores.status == "ok")]
+    if rows.empty:
+        return None
+    variants = rows.get(
+        "statistics.vr_cli_variant", pd.Series("thresholded", index=rows.index)
+    ).fillna("thresholded")
+    if variants.nunique() != 1 or not variants.isin(("continuous", "thresholded")).all():
+        raise ValueError("Mixed or unknown VR-CLI variants; use separate run directories")
+    return variants.iloc[0]
+
+
 def analyze(config):
     run = Path(config["run_dir"])
     rewards = report_rewards(config)
     scores, timings, originals = load_results(run, rewards)
+    variant = vrcli_variant(scores)
     scores["included_in_primary_benchmark"] = scores.reward.isin(rewards)
     export_table(scores, run / "tables" / "candidate_scores")
     export_table(timings, run / "tables" / "pair_timings")
@@ -334,6 +348,7 @@ def analyze(config):
         export_table(worker_frame, run / "tables" / "workers")
     return {
         "rewards": rewards,
+        "vr_cli_variant": variant,
         "scores": scores,
         "summary": summary,
         "coverage": coverage,

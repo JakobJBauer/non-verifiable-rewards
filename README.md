@@ -208,7 +208,7 @@ lengths, and empty references raise errors.
 | `BLEURTReward` / `bleurt.py` | Raw learned regression score; not restricted to [0, 1] | references |
 | `SelfCertaintyReward` / `self_certainty.py` | Mean KL(uniform \|\| next-token distribution) | prompts |
 | `ReferenceLikelihoodReward` / `reference_likelihood.py` | log p(reference \| prompt, candidate) | prompts, references |
-| `VRCLIReward` / `vr_cli.py` | Thresholded percent improvement in reference perplexity | prompts, references |
+| `VRCLIReward` / `vr_cli.py` | Continuous percent improvement in reference perplexity | prompts, references |
 | `LengthReward` / `length.py` | Word count; optionally character count | none |
 
 For example, score both sides of a comparison against the **same independently
@@ -230,7 +230,8 @@ a, b = rouge_scores
 pairwise_credit = 1.0 if a > b else 0.5 if a == b else 0.0
 ```
 
-Thresholded VR-CLI will produce ties, so report tie rates along with accuracy.
+Report tie rates along with accuracy. Continuous VR-CLI removes threshold-induced
+ties; identical scores and the numerical tie tolerance can still produce ties.
 For reward correlations, compare preferred-minus-rejected margins on the same
 pairs; raw likelihoods also vary with reference length and prompt difficulty.
 
@@ -292,19 +293,29 @@ reference, these produce identical rankings. VR-CLI always uses the mean to
 compute per-token perplexity.
 
 For conditioned and baseline mean log probabilities `L_candidate` and `L_base`,
-VR-CLI computes `I = 100 * (1 - exp(L_base - L_candidate))`. The defaults follow
-[Gurung & Lapata, Eqs. 4 and 7](https://arxiv.org/html/2503.22828v2):
+VR-CLI returns `I = 100 * (1 - exp(L_base - L_candidate))` directly, following
+[Gurung & Lapata, Eq. 4](https://arxiv.org/html/2503.22828v2) **without** the
+threshold schedule in Eq. 7. This is a continuous VR-CLI adaptation for offline
+preference comparison. Negative improvements remain negative; there is no
+clipping, bucketing, or rescaling to [0, 1]. The `thresholds` and `levels`
+constructor arguments have been removed. Nonfinite improvements from extreme
+numeric overflow raise an error instead of creating a tied floor.
 
-| Perplexity improvement, in percent | Reward |
-| --- | --- |
-| `I < 0.05` | 0 |
-| `0.05 <= I < 1` | 0.5 |
-| `1 <= I < 2` | 0.9 |
-| `I >= 2` | 1 |
+For a pair sharing one baseline/reference, this transformation is strictly
+increasing in conditioned mean log probability, so its mathematical ordering
+matches reference likelihood. It restores resolution, not an independent
+preference signal; numerical precision and the configured tie tolerance still
+apply. Recalculating from the frozen 2,000-pair scores per dataset removes all
+VR-CLI ties (previously 73.1% on Reddit and 70.75% on LitBench). Accuracy becomes
+44.25% and 49.90%, respectively, exactly matching reference likelihood. This
+change does not promise improved agreement with human preferences.
 
-Override `thresholds` and `levels` together to study a different schedule. This
-is the paper's thresholded PPL variant; a clipped log-likelihood difference is
-a different variant. Baselines shared by pairs are computed once per scoring
+The saved November 2026 runs and audits retain their original thresholded
+scores. New scores record `statistics.vr_cli_variant = "continuous"`; reports
+identify unmarked historical scores as thresholded and reject mixed variants.
+Use a new run directory when scoring with the new implementation.
+
+Baselines shared by pairs are computed once per scoring
 call. `vr_cli.score_from_log_likelihoods(conditioned, baselines)` can reuse
 precomputed **mean** log probabilities without another forward pass.
 
@@ -352,7 +363,7 @@ uv run --extra lm --extra bertscore --extra bleurt pytest
 ```
 
 The core tests use analytic distributions to check token alignment, padding,
-length normalization, KL direction, and VR-CLI thresholds. Optional backend
+length normalization, KL direction, and continuous VR-CLI ordering. Optional backend
 tests use tiny locally initialized Transformers models and BLEURT's bundled
 test checkpoint; they download no pretrained model weights. Tests for missing
 optional dependencies are skipped when their extra is not installed.

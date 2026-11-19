@@ -1,12 +1,11 @@
-"""Thresholded Verifiable Rewards via Completion Likelihood Improvement.
+"""Continuous Verifiable Rewards via Completion Likelihood Improvement.
 
-Implements percent perplexity improvement (Eq. 4) and the threshold schedule
-(Eq. 7) from Gurung & Lapata: https://arxiv.org/html/2503.22828v2
+Implements percent perplexity improvement (Eq. 4), without the threshold
+schedule (Eq. 7), from Gurung & Lapata: https://arxiv.org/html/2503.22828v2
 The candidate summary/story substitutes for the paper's generated plan.
 """
 
 import math
-from bisect import bisect_right
 from collections.abc import Callable, Sequence
 
 from .base import checked_scores, validate_inputs
@@ -19,7 +18,7 @@ def perplexity_improvement(conditioned_logp: float, baseline_logp: float) -> flo
 
     Compute 100 * (1 - exp(baseline_logp - conditioned_logp)) without forming
     full sequence probabilities or large perplexities. Extreme regressions
-    may return -inf; they map to the lowest threshold reward.
+    may return -inf; the reward API rejects nonfinite scores.
     """
     if not math.isfinite(conditioned_logp) or not math.isfinite(baseline_logp):
         raise ValueError("Log probabilities must be finite")
@@ -30,35 +29,25 @@ def perplexity_improvement(conditioned_logp: float, baseline_logp: float) -> flo
 
 
 class VRCLIReward:
-    """Threshold percentage improvements at 0.05, 1, 2 -> 0, 0.5, 0.9, 1.
+    """Return continuous percent reduction in reference perplexity.
 
-    Thresholds are in percentage points: 0.05 means a 0.05% PPL improvement.
+    Negative improvements remain negative; no thresholds or clipping apply.
+    For a shared baseline, rankings match conditioned mean log likelihoods
+    (up to floating-point precision and downstream tie tolerances).
     Baselines are deduplicated within a call, but never cached across calls,
     so sharing a scorer whose weights change cannot reuse stale baselines.
     """
+
+    variant = "continuous"
 
     def __init__(
         self,
         scorer: CausalLMScorer,
         *,
-        thresholds: Sequence[float] = (0.05, 1.0, 2.0),
-        levels: Sequence[float] = (0.0, 0.5, 0.9, 1.0),
         context_builder: Callable[[str, str | None], str] = reference_context,
     ) -> None:
         self.scorer = scorer
         self.context_builder = context_builder
-        self.thresholds = tuple(float(value) for value in thresholds)
-        self.levels = tuple(float(value) for value in levels)
-        if len(self.levels) != len(self.thresholds) + 1 or not self.thresholds:
-            raise ValueError(
-                "Provide at least one threshold and exactly one more reward level"
-            )
-        if not all(math.isfinite(value) for value in self.thresholds + self.levels):
-            raise ValueError("Thresholds and reward levels must be finite")
-        if any(a >= b for a, b in zip(self.thresholds, self.thresholds[1:])):
-            raise ValueError("Thresholds must be strictly increasing")
-        if any(a > b for a, b in zip(self.levels, self.levels[1:])):
-            raise ValueError("Reward levels must be nondecreasing")
 
     def score_from_log_likelihoods(
         self, conditioned: Sequence[float], baselines: Sequence[float]
@@ -66,12 +55,13 @@ class VRCLIReward:
         """Reuse precomputed *mean* log likelihoods with identical target tokens."""
         if len(conditioned) != len(baselines):
             raise ValueError("conditioned and baselines must have the same length")
-        return [
-            self.levels[
-                bisect_right(self.thresholds, perplexity_improvement(value, baseline))
-            ]
-            for value, baseline in zip(conditioned, baselines, strict=True)
-        ]
+        return checked_scores(
+            [
+                perplexity_improvement(value, baseline)
+                for value, baseline in zip(conditioned, baselines, strict=True)
+            ],
+            len(conditioned),
+        )
 
     def score(
         self,

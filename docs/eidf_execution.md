@@ -189,10 +189,12 @@ After the main report has generated the analysis tables, run:
 ```
 
 This exports paired comparisons between every method, equal-prompt weighting
-sensitivity, native encoder-truncation groups, threshold-induced ties, and
+sensitivity, native encoder-truncation groups, VR-CLI ties, and
 comparison with the pilot on the same 128 pairs per dataset. It also checks
 that full-text ROUGE-L/length scores agree with the pilot and that monotone
-VR-CLI thresholds never reverse a raw likelihood ranking. Bootstrap intervals
+VR-CLI transformations never reverse a raw likelihood ranking. The saved run
+uses thresholds; current scoring returns continuous improvement and requires
+a new run directory. Bootstrap intervals
 are exploratory and do not adjust for multiple comparisons. Pilot-versus-GPU
 encoder differences combine a checkpoint change and a text-policy change.
 

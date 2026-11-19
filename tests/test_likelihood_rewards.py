@@ -54,7 +54,7 @@ def test_vrcli_reuses_baseline_within_call_and_keys_by_reference():
         "references": ["gold", "gold", "other"],
         "prompts": ["input"] * 3,
     }
-    assert reward.score(**kwargs) == [1.0, 1.0, 1.0]
+    assert reward.score(**kwargs) == pytest.approx([100 * (1 - math.exp(-1))] * 3)
     assert scorer.calls[0][1:] == (["gold", "gold", "other"], "mean")
     assert scorer.calls[1] == (
         [reference_context("input", None)] * 2,
@@ -66,33 +66,36 @@ def test_vrcli_reuses_baseline_within_call_and_keys_by_reference():
 
 
 @pytest.mark.parametrize(
-    "improvement,expected",
-    [
-        (-20, 0),
-        (0, 0),
-        (0.04, 0),
-        (0.1, 0.5),
-        (0.99, 0.5),
-        (1.1, 0.9),
-        (1.99, 0.9),
-        (2.1, 1),
-        (50, 1),
-    ],
+    "improvement", [-200, -20, 0, 0.04, 0.05, 0.1, 0.99, 1, 1.1, 1.99, 2, 2.1, 50]
 )
-def test_vrcli_published_percent_schedule(improvement, expected):
+def test_vrcli_returns_percent_improvement_without_thresholds(improvement):
     baseline = -3.0
     conditioned = baseline - math.log1p(-improvement / 100)
     assert perplexity_improvement(conditioned, baseline) == pytest.approx(improvement)
     assert VRCLIReward(RecordingScorer()).score_from_log_likelihoods(
         [conditioned], [baseline]
-    ) == [expected]
+    ) == pytest.approx([improvement])
 
 
-def test_vrcli_threshold_equality_and_order():
-    improvement = perplexity_improvement(-1.9, -2.0)
-    reward = VRCLIReward(RecordingScorer(), thresholds=[improvement], levels=[0, 1])
-    assert reward.score_from_log_likelihoods([-1.9], [-2.0]) == [1.0]
-    assert reward.score_from_log_likelihoods([-1.9001], [-2.0]) == [0.0]
+@pytest.mark.parametrize(
+    "improvements", [(-20, -10), (0.01, 0.04), (0.1, 0.9), (1.1, 1.9), (3, 50)]
+)
+def test_vrcli_distinguishes_candidates_within_each_former_bucket(improvements):
+    baseline = -3.0
+    conditioned = [baseline - math.log1p(-value / 100) for value in improvements]
+    scores = VRCLIReward(RecordingScorer()).score_from_log_likelihoods(
+        conditioned, [baseline] * 2
+    )
+    assert scores == pytest.approx(improvements)
+    assert scores[0] < scores[1]
+
+
+def test_vrcli_preserves_true_ties_and_small_improvements():
+    reward = VRCLIReward(RecordingScorer())
+    scores = reward.score_from_log_likelihoods([-2, -2], [-3, -3])
+    assert scores[0] == scores[1]
+    improvement = reward.score_from_log_likelihoods([-2 + 1e-12], [-2])[0]
+    assert 0 < improvement < 1e-9
 
 
 def test_vrcli_stability_for_long_references_and_extreme_regressions():
@@ -100,25 +103,21 @@ def test_vrcli_stability_for_long_references_and_extreme_regressions():
         100 * (1 - math.exp(-0.1))
     )
     reward = VRCLIReward(RecordingScorer())
-    assert reward.score_from_log_likelihoods([-10000], [-1]) == [0]
-    with pytest.raises(ValueError, match="finite"):
-        reward.score_from_log_likelihoods([math.nan], [-1])
+    # Overflow must fail explicitly, rather than become an artificial tied floor.
+    for conditioned in (-10000, -710):
+        with pytest.raises(ValueError, match="finite"):
+            reward.score_from_log_likelihoods([conditioned], [-1])
     with pytest.raises(ValueError, match="same length"):
         reward.score_from_log_likelihoods([-1], [])
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        {"thresholds": [1, 0]},
-        {"thresholds": [1, 1], "levels": [0, 0.5, 1]},
-        {"thresholds": [math.nan], "levels": [0, 1]},
-        {"thresholds": [1], "levels": [1, 0]},
-    ],
-)
-def test_vrcli_rejects_invalid_thresholds(kwargs):
-    with pytest.raises(ValueError):
-        VRCLIReward(RecordingScorer(), **kwargs)
+@pytest.mark.parametrize("invalid", [math.nan, math.inf, -math.inf])
+def test_vrcli_rejects_nonfinite_log_probabilities(invalid):
+    reward = VRCLIReward(RecordingScorer())
+    with pytest.raises(ValueError, match="finite"):
+        reward.score_from_log_likelihoods([invalid], [-1])
+    with pytest.raises(ValueError, match="finite"):
+        reward.score_from_log_likelihoods([-1], [invalid])
 
 
 @pytest.mark.parametrize(

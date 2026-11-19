@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .analysis import export_table, preference_credit
+from .analysis import export_table, preference_credit, vrcli_variant
 from .io import DATASETS
 
 
@@ -22,7 +22,8 @@ def supplementary(run_dir, pilot_dir):
     pilot_margins = pd.read_parquet(pilot / "tables" / "pair_margins.parquet")
     pilot_summary = pd.read_parquet(pilot / "tables" / "summary.parquet")
     rewards = list(summary.reward.unique())
-    comparisons, overlaps, truncation, weighting, thresholds = [], [], [], [], []
+    variant = vrcli_variant(scores)
+    comparisons, overlaps, truncation, weighting, information_loss = [], [], [], [], []
 
     for dataset in DATASETS:
         frame = margins[margins.dataset == dataset].set_index("pair_id")
@@ -116,29 +117,30 @@ def supplementary(run_dir, pilot_dir):
 
         if "vr_cli" in rewards:
             raw = preference_credit(frame.reference_likelihood, config["tie_tolerance"])
-            bucketed = preference_credit(frame.vr_cli, config["tie_tolerance"])
+            vr = preference_credit(frame.vr_cli, config["tie_tolerance"])
             inversions = int(
-                ((raw == 1) & (bucketed == 0) | (raw == 0) & (bucketed == 1)).sum()
+                ((raw == 1) & (vr == 0) | (raw == 0) & (vr == 1)).sum()
             )
-            thresholds.append(
+            information_loss.append(
                 {
                     "dataset": dataset,
                     "pairs": len(frame),
+                    "vr_cli_variant": variant,
                     "raw_likelihood_accuracy": raw.mean(),
-                    "thresholded_accuracy": bucketed.mean(),
-                    "thresholded_tie_rate": (bucketed == 0.5).mean(),
+                    "vr_cli_accuracy": vr.mean(),
+                    "vr_cli_tie_rate": (vr == 0.5).mean(),
                     "raw_correct_collapsed_to_tie": int(
-                        ((raw == 1) & (bucketed == 0.5)).sum()
+                        ((raw == 1) & (vr == 0.5)).sum()
                     ),
                     "raw_incorrect_collapsed_to_tie": int(
-                        ((raw == 0) & (bucketed == 0.5)).sum()
+                        ((raw == 0) & (vr == 0.5)).sum()
                     ),
                     "ranking_inversions": inversions,
                 }
             )
             if inversions:
                 raise ValueError(
-                    "Monotone VR-CLI thresholds reversed a raw likelihood ranking"
+                    "Monotone VR-CLI transformation reversed a raw likelihood ranking"
                 )
 
     for name, rows in (
@@ -146,7 +148,7 @@ def supplementary(run_dir, pilot_dir):
         ("pilot_overlap", overlaps),
         ("encoder_truncation_diagnostics", truncation),
         ("prompt_weighting_sensitivity", weighting),
-        ("vr_cli_information_loss", thresholds),
+        ("vr_cli_information_loss", information_loss),
     ):
         if rows:
             export_table(pd.DataFrame(rows), run / "tables" / name)

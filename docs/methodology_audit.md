@@ -3,6 +3,11 @@
 Audit date: 13 November 2026. Run:
 `outputs/eidf_qwen3_4b/` / persistent EIDF `qwen3_4b_20261113`.
 
+This audit describes the frozen **thresholded** implementation and results.
+Current `VRCLIReward` returns continuous percent perplexity improvement without
+the Eq. 7 thresholds; see the [current formula and rationale](../README.md#a-shared-language-model).
+The audited scores and artifacts have not been changed.
+
 **The checks found no reference-join, preference-orientation, likelihood-mask,
 or VR-CLI arithmetic error. The experiments are nevertheless adaptations of
 the papers, not reproductions of their full methods.** In particular, a

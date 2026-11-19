@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +34,7 @@ from non_verifiable_rewards.experiments.smoke import (
     set_lm_scope,
     smoke_check,
 )
+from non_verifiable_rewards.rewards import VRCLIReward
 
 
 def test_reference_selection_never_uses_either_litbench_candidate():
@@ -157,6 +159,49 @@ def test_lexical_scores_use_full_original_outputs():
     assert all(not row["preprocessing_truncated"] for row in rows)
 
 
+@pytest.mark.parametrize("conditioned", [(-3.2, -3.4), (-1, -2)])
+def test_lm_backend_records_continuous_vrcli_without_bucket_ties(tmp_path, conditioned):
+    pair = make_pair(
+        "reddit_tldr", "p", "Prompt", "better", "worse", "Reference", "ref", {}
+    )
+    pair["lengths"] = {
+        field: {"original_words": 1, "scored_words": 1, "truncated": False}
+        for field in ("prompt", "preferred", "rejected", "reference")
+    }
+    pair["reference_prefix_overlaps_candidate"] = False
+
+    class Tokenizer:
+        def apply_chat_template(self, messages, **kwargs):
+            return messages[0]["content"]
+
+        def encode(self, text, **kwargs):
+            return text.split()
+
+    class Scorer:
+        tokenizer = Tokenizer()
+
+        def log_likelihood(self, contexts, references, *, reduction):
+            assert reduction == "mean"
+            return [-3] if len(contexts) == 1 else list(conditioned)
+
+        def self_certainty(self, contexts, candidates):
+            return [0.4] * len(candidates)
+
+    engine = Backend.__new__(Backend)
+    engine.name, engine.scorer = "lm", Scorer()
+    engine.vr_cli = VRCLIReward(engine.scorer)
+    with Journal(tmp_path / "baselines.jsonl") as baselines:
+        rows, _ = engine.evaluate(pair, pair, baselines)
+    vr = [row for row in rows if row["reward"] == "vr_cli"]
+    expected = [100 * (1 - math.exp(-3 - value)) for value in conditioned]
+    assert [row["score"] for row in vr] == pytest.approx(expected)
+    assert vr[0]["score"] > vr[1]["score"]
+    assert all(row["statistics"]["vr_cli_variant"] == "continuous" for row in vr)
+    assert all(
+        row["score"] == row["statistics"]["perplexity_improvement_percent"] for row in vr
+    )
+
+
 @pytest.fixture
 def synthetic_run(tmp_path):
     for name in DATASETS:
@@ -218,6 +263,7 @@ def synthetic_run(tmp_path):
 
 def test_analysis_preserves_ties_and_undefined_constant_correlations(synthetic_run):
     result = analyze(synthetic_run)
+    assert result["vr_cli_variant"] == "thresholded"
     vr = result["summary"].query("reward == 'vr_cli'")
     assert vr.accuracy.tolist() == [0.5, 0.5]
     assert vr.tie_rate.tolist() == [1, 1]
@@ -225,6 +271,30 @@ def test_analysis_preserves_ties_and_undefined_constant_correlations(synthetic_r
     assert (
         Path(synthetic_run["run_dir"]) / "tables" / "candidate_scores.parquet"
     ).is_file()
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_analysis_identifies_continuous_vrcli_and_rejects_mixed_runs(
+    synthetic_run, mixed
+):
+    root = Path(synthetic_run["run_dir"]) / "scores" / "lm"
+    for path in root.glob("*.jsonl"):
+        records = read_jsonl(path)
+        for index, record in enumerate(records):
+            for row in record["rows"]:
+                if row["reward"] == "vr_cli" and (not mixed or index == 0):
+                    row["score"] = 10 if row["side"] == "preferred" else 5
+                    row["statistics"]["vr_cli_variant"] = "continuous"
+        write_jsonl(path, records)
+    if mixed:
+        with pytest.raises(ValueError, match="Mixed or unknown VR-CLI variants"):
+            analyze(synthetic_run)
+    else:
+        result = analyze(synthetic_run)
+        assert result["vr_cli_variant"] == "continuous"
+        vr = result["summary"].query("reward == 'vr_cli'")
+        assert vr.accuracy.tolist() == [1, 1]
+        assert vr.tie_rate.tolist() == [0, 0]
 
 
 def test_analysis_rejects_overlapping_shards(synthetic_run):

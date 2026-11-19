@@ -24,7 +24,7 @@ LABELS = {
     "bleurt": "BLEURT",
     "self_certainty": "Self-certainty",
     "reference_likelihood": "Reference likelihood",
-    "vr_cli": "Thresholded VR-CLI",
+    "vr_cli": "VR-CLI",
     "length": "Length baseline",
 }
 DATASET_LABELS = {"reddit_tldr": "Reddit TL;DR", "litbench": "LitBench"}
@@ -261,7 +261,7 @@ def length_figure(result, config):
 def vrcli_figure(result, config):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     fig.suptitle(
-        "VR-CLI: continuous improvement and threshold saturation",
+        f"VR-CLI ({result['vr_cli_variant']}): improvement and preference margins",
         fontsize=17,
         fontweight="bold",
     )
@@ -291,18 +291,18 @@ def vrcli_figure(result, config):
             va="top",
             fontsize=9,
         )
-        levels = [0, 0.5, 0.9, 1]
-        fractions = [(rows.score == level).mean() for level in levels]
-        axes[1, col].bar(range(4), fractions, color="#0099BB")
-        axes[1, col].set_xticks(
-            range(4),
-            ["0\nI < 0.05%", "0.5\n0.05% ≤ I < 1%", "0.9\n1% ≤ I < 2%", "1\nI ≥ 2%"],
-            fontsize=9,
+        margins = result["margins"].query("dataset == @name")
+        axes[1, col].scatter(
+            margins.reference_likelihood,
+            margins.vr_cli,
+            color="#0099BB",
+            alpha=0.5,
+            s=12,
         )
-        axes[1, col].set_ylim(0, 1.1)
-        axes[1, col].yaxis.set_major_formatter(PercentFormatter(1))
-        axes[1, col].set_ylabel("Share of candidate outputs")
-        axes[1, col].set_xlabel("Published thresholded reward")
+        axes[1, col].axhline(0, color="#333333", linestyle=":")
+        axes[1, col].axvline(0, color="#333333", linestyle=":")
+        axes[1, col].set_ylabel("VR-CLI margin (preferred − rejected)")
+        axes[1, col].set_xlabel("Reference log-likelihood margin (preferred − rejected)")
         tie = (
             result["summary"]
             .query("dataset == @name and reward == 'vr_cli'")
@@ -520,9 +520,15 @@ def write_reports(result, config):
         "Reddit references are original human TL;DRs joined by post ID with matching post text. Pairs containing the reference itself are excluded. LitBench references are the highest-upvote distinct story outside the pair; maximum observed upvotes resolve varying scraped counts.",
         "The length baseline counts full-output words. ROUGE-L uses full texts. Neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. Human preferences refer to the full original outputs.",
         limits,
-        "Reference likelihood uses mean reference-token log probability. VR-CLI reuses it and the no-candidate baseline, applying the paper's percent-perplexity thresholds. Policy and frozen scorers coincide here because they share the same checkpoint.",
+        "Reference likelihood uses mean reference-token log probability. VR-CLI reuses it and the no-candidate baseline to compute percent perplexity improvement. Policy and frozen scorers coincide here because they share the same checkpoint.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
     ]
+    if "vr_cli" in result["rewards"]:
+        notes.append(
+            "This run uses continuous VR-CLI: the percent perplexity improvement is the reward, without thresholds or clipping. For a shared baseline it has the same mathematical pairwise ordering as reference likelihood; floating-point precision and tie tolerance can still produce ties. This is an unthresholded adaptation of the published reward."
+            if result["vr_cli_variant"] == "continuous"
+            else "This historical run uses thresholded VR-CLI: the published cutoffs at 0.05%, 1%, and 2% map improvement to rewards 0, 0.5, 0.9, and 1. Saved scores have not been converted to the continuous variant."
+        )
     if config["pilot"]:
         notes.insert(
             0,
@@ -550,7 +556,7 @@ def write_reports(result, config):
         if "vr_cli" in result["rewards"]:
             vr = frame[frame.reward == "vr_cli"].iloc[0]
             findings.append(
-                f"{DATASET_LABELS[name]}: VR-CLI ties on {vr.tie_rate:.1%} of pairs; inspect the continuous improvement distribution before interpreting its thresholded accuracy."
+                f"{DATASET_LABELS[name]}: {result['vr_cli_variant'].capitalize()} VR-CLI ties on {vr.tie_rate:.1%} of pairs."
             )
     if "reference_likelihood" not in result["rewards"]:
         notes.insert(
@@ -569,7 +575,7 @@ def write_reports(result, config):
         ("reward_correlations", "Reward-margin correlations"),
         ("decision_agreement", "Decision agreement"),
         ("length_diagnostics", "Length effects"),
-        ("vr_cli_diagnostics", "VR-CLI thresholds")
+        ("vr_cli_diagnostics", "VR-CLI diagnostics")
         if "vr_cli" in result["rewards"]
         else ("qwen_smoke_check", "Qwen: one-pair execution check"),
         ("input_coverage", "Input shortening"),

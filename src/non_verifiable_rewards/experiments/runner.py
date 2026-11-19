@@ -237,6 +237,7 @@ class Backend:
             for index, side in enumerate(("preferred", "rejected")):
                 improvement = perplexity_improvement(conditioned[index], baseline)
                 details[side] = {
+                    "vr_cli_variant": self.vr_cli.variant,
                     "conditioned_logp_mean": conditioned[index],
                     "baseline_logp_mean": baseline,
                     "conditioned_logp_sum": conditioned[index] * reference_tokens,
