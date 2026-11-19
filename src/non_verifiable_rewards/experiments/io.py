@@ -3,7 +3,6 @@
 import contextlib
 import datetime as dt
 import fcntl
-import hashlib
 import importlib.metadata
 import json
 import os
@@ -12,6 +11,8 @@ import sys
 import tarfile
 import tomllib
 from pathlib import Path
+
+from .._hashing import digest, file_sha256
 
 SCHEMA_VERSION = 1
 DATASETS = ("reddit_tldr", "litbench")
@@ -35,17 +36,6 @@ BACKEND_REWARDS = {
 
 def utc_now():
     return dt.datetime.now(dt.UTC).isoformat()
-
-
-def digest(value):
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, ensure_ascii=False).encode()
-    ).hexdigest()
-
-
-def file_sha256(path):
-    with Path(path).open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def write_json(path, value):

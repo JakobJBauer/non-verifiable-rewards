@@ -13,12 +13,12 @@ from non_verifiable_rewards.experiments.analysis import (
     load_results,
     preference_credit,
 )
-from non_verifiable_rewards.experiments.data import (
+from non_verifiable_rewards.data.pairs import (
     litbench_pairs,
     make_pair,
     reddit_pairs,
-    sample_pairs,
 )
+from non_verifiable_rewards.experiments.data import sample_pairs
 from non_verifiable_rewards.experiments.io import (
     BACKEND_REWARDS,
     DATASETS,

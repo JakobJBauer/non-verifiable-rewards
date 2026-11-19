@@ -1,4 +1,4 @@
-"""Download immutable model snapshots and the public reference data."""
+"""Download immutable model snapshots and checkpoints."""
 
 import json
 import logging
@@ -8,7 +8,6 @@ from pathlib import Path
 
 from .io import ensure_run, file_sha256, write_json
 
-TLDR_URL = "https://openaipublic.blob.core.windows.net/summarize-from-feedback/datasets/tldr_3_filtered/valid.jsonl"
 logger = logging.getLogger(__name__)
 
 

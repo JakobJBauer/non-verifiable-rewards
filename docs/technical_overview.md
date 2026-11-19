@@ -20,10 +20,10 @@ rule for measuring their agreement; that is not implemented here.
 
 | Location | Responsibility |
 | --- | --- |
-| [`src/non_verifiable_rewards/data/loaders.py`](../src/non_verifiable_rewards/data/loaders.py) | Convenient three-column dataset loaders |
+| [`src/non_verifiable_rewards/data/`](../src/non_verifiable_rewards/data) | Reference-bearing loaders, pair construction, prompt views and splits |
 | [`src/non_verifiable_rewards/rewards/`](../src/non_verifiable_rewards/rewards) | One importable module per reward and a shared causal-LM scorer |
-| [`experiments/data.py`](../src/non_verifiable_rewards/experiments/data.py) | Benchmark filtering, reference construction, deterministic sampling, preprocessing |
-| [`experiments/assets.py`](../src/non_verifiable_rewards/experiments/assets.py) | Reference/checkpoint downloads and resolved model manifest |
+| [`experiments/data.py`](../src/non_verifiable_rewards/experiments/data.py) | Load shared data, freeze deterministic samples, preprocess scoring text |
+| [`experiments/assets.py`](../src/non_verifiable_rewards/experiments/assets.py) | Checkpoint downloads and resolved model manifest |
 | [`experiments/runner.py`](../src/non_verifiable_rewards/experiments/runner.py) | Model loading, scoring, diagnostics, sharding, and resumable workers |
 | [`experiments/io.py`](../src/non_verifiable_rewards/experiments/io.py) | Configuration, hashes, source snapshots, atomic files, pair journals |
 | [`experiments/analysis.py`](../src/non_verifiable_rewards/experiments/analysis.py) | Preference accuracy, uncertainty, correlations, coverage, exports |
@@ -77,14 +77,17 @@ The reference is not the preference label. It is an auxiliary text supplied to
 metrics such as ROUGE-L and BERTScore. Taking the preferred candidate itself as
 the reference would make those comparisons circular.
 
-The convenience `load_sff()` and `load_litbench()` functions return only
-`prompt`, `preferred`, `rejected`. They do not construct benchmark references
-or apply all benchmark filters. The experiment preparation stage therefore
-reads the richer raw sources and builds the schema above.
+The public `load_sff()` and `load_litbench()` functions return this full schema,
+including references and the benchmark filters. Experiment preparation uses
+these same loaders and only samples/serializes their output. No prepared
+benchmark JSON is required for loading. `split_by_prompt` keeps all comparisons
+of a prompt together when creating training/evaluation partitions;
+`to_prompt_dataset` provides one prompt/reference per task for generated
+rollouts. See the [data-loading guide](data_loading.md) for usage and scope.
 
 ### Reddit TL;DR
 
-The source is the **validation** comparisons of
+For the recorded offline benchmark, the source is the **validation** comparisons of
 `openai/summarize_from_feedback`, read through its Parquet conversion or a
 cached Arrow file. A row's `choice` selects the preferred summary. Candidates
 include outputs from existing summarization policies: human preference labels
@@ -105,6 +108,10 @@ POST: {post}
 
 TL;DR:
 ```
+
+The public loader also supports the SFF training comparisons, joining those to
+`tldr_3_filtered/train.jsonl`. Downloads and joins happen inside the loader;
+the benchmark explicitly requests validation to preserve its original scope.
 
 The recorded preparation audit starts with 86,086 source comparisons and keeps
 36,093 eligible pairs from 5,821 prompts. The exclusion counts are 37,367

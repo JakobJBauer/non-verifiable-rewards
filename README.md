@@ -18,6 +18,17 @@ Dataset loaders live in `src/non_verifiable_rewards/data` and are imported with:
 from non_verifiable_rewards.data import load_litbench, load_sff
 ```
 
+Both loaders now return `prompt`, `preferred`, `rejected`, **`reference`**, IDs,
+and provenance. SFF joins the original human TL;DR from the matching split;
+LitBench selects a distinct third story for the same prompt. References are
+constructed in the data package, and benchmark preparation uses these same
+loaders. No prepared experiment JSON is needed for direct loading.
+
+For policy rollouts, use `split_by_prompt` to reserve entire prompts, then
+`to_prompt_dataset` to obtain one prompt/reference per task. See the
+[data-loading guide](docs/data_loading.md) for training/evaluation examples,
+local source overrides, and the limitations of the LitBench reference proxy.
+
 ## Completed GPU benchmark
 
 The 13 November 2026 EIDF run scored all seven methods on **2,000 pairs per
@@ -38,7 +49,7 @@ at Git tag `cpu-pilot-128-pairs`.
 
 ## Run the experiments
 
-The experiment package builds independent references, freezes a seeded sample,
+The experiment package loads reference-bearing pairs, freezes a seeded sample,
 scores both members of every pair, and creates tables and figures. The local
 configuration uses 128 pairs per dataset, Qwen3-0.6B with CPU dynamic int8 linear
 layers, DistilBERT BERTScore, and the trained BLEURT-20-D3 checkpoint. Neural
