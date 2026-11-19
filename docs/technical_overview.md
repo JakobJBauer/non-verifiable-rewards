@@ -1,8 +1,9 @@
 # Technical report: offline comparison of non-verifiable rewards
 
 This report describes the current source and the completed 13 November 2026
-Qwen3-4B experiment. The completed run used thresholded VR-CLI; current scoring
-returns continuous perplexity improvement. The scoring-source hash therefore
+Qwen3-4B experiment. The completed run used thresholded VR-CLI with generic
+conditioning; current scoring returns continuous perplexity improvement with
+task-specific summary/story prompts. The scoring-source hash therefore
 differs from the recorded GPU workers, and saved results remain historical.
 
 The project evaluates **six rewards plus a length baseline** on pre-existing
@@ -362,7 +363,7 @@ and [`experiments/runner.py`](../src/non_verifiable_rewards/experiments/runner.p
 
 ### Conditioning and raw likelihood
 
-The experiment constructs a user message containing the source prompt followed
+The generic reference-likelihood benchmark constructs a user message containing the source prompt followed
 by the literal text:
 
 ```text
@@ -407,22 +408,31 @@ inference configuration.
 
 ### VR-CLI baseline and continuous transformation
 
-The no-candidate baseline uses the same prompt/chat template without the
-candidate section:
+VR-CLI uses its own task-specific user message, `C_task(x,y)`. Reddit requests
+an accurate, concise summary of the source text, presents the candidate as an
+example summary, and asks for a summary of that source. LitBench requests a
+standalone story for the writing prompt and presents the candidate as an
+example story. Both use Qwen's chat template with thinking disabled. The
+held-out reference remains the scored assistant continuation. It is never
+included in the context, and candidate tokens are not scored by VR-CLI.
+
+The no-candidate baseline uses the identical task instruction and final
+request, omitting only the example block:
 
 \[
 L_0=\frac{1}{M}\sum_{t=1}^{M}
-\log p_\theta(r_t\mid C(x),r_{<t}).
+\log p_\theta(r_t\mid C_{\mathrm{task}}(x),r_{<t}).
 \]
 
+Let `L_task` be the mean reference log probability under `C_task(x,y)`.
 The percent improvement in reference perplexity is:
 
 \[
-I=100\frac{\exp(-L_0)-\exp(-L_y)}{\exp(-L_0)}
- =100\left[1-\exp(L_0-L_y)\right].
+I=100\frac{\exp(-L_0)-\exp(-L_{\mathrm{task}})}{\exp(-L_0)}
+ =100\left[1-\exp(L_0-L_{\mathrm{task}})\right].
 \]
 
-The code evaluates `-100 * math.expm1(L_0 - L_y)` for numerical stability and
+The code evaluates `-100 * math.expm1(L_0 - L_task)` for numerical stability and
 returns `I` directly as the reward. It does not exponentiate summed sequence
 log probabilities, clip negative improvements, or apply thresholds. Extreme
 regressions that overflow the calculation are rejected as nonfinite scores;
@@ -442,14 +452,21 @@ Current `VRCLIReward` no longer accepts `thresholds` or `levels`. It is an
 explicit unthresholded adaptation of the paper's reward.
 
 Within a pair, both candidates share `L_0`, so continuous VR-CLI is strictly
-increasing in their raw likelihoods. Its mathematical pairwise ordering is
-identical to reference likelihood, although its margins and cross-pair scale
-differ. Floating-point precision and absolute tie tolerances can still create
-ties. Recalculation from the frozen run's likelihoods removes all threshold
-ties: Reddit accuracy is 44.25% and LitBench accuracy is 49.90%, matching
-reference likelihood. Original journals and reports retain the old results.
+increasing in their raw likelihoods **under its own task-specific prompt**.
+It can disagree with the generic reference-likelihood benchmark because that
+method uses different conditioning. The supplementary monotonicity check uses
+VR-CLI's own conditioned likelihoods; agreement with generic likelihood is a
+separate diagnostic. Floating-point precision and absolute tie tolerances can
+still create ties. No preference-accuracy improvement is assumed from wording
+alone, especially for LitBench's independent-story reference proxy.
 
-New worker statistics record `vr_cli_variant = "continuous"`. Analysis treats
+Removing thresholds from the frozen run's generic-prompt likelihoods gives
+44.25% accuracy on Reddit and 49.90% on LitBench with no ties. Those results
+do not evaluate the new prompts, which require new model inference. Original
+journals and reports retain the old results.
+
+New worker statistics record `vr_cli_variant = "continuous_task_specific"`;
+`"continuous"` denotes the earlier generic-prompt version. Analysis treats
 unmarked historical scores as thresholded and rejects mixed or unknown variants.
 Reports identify the variant and show improvement distributions and pairwise
 margins. A new scoring run needs a separate run directory; the worker identity
@@ -457,17 +474,21 @@ check prevents resuming old shards with changed scoring code.
 
 ### Shared computation and caching
 
-The LM worker calls `CausalLMScorer` directly for both likelihood and
-self-certainty, and calls `VRCLIReward.score_from_log_likelihoods` to reuse
-the computed likelihoods. It does not load three copies of Qwen.
+The LM worker calls one `CausalLMScorer` for all three LM rewards. VR-CLI's
+task-specific likelihood evaluations are separate from generic reference
+likelihood; `VRCLIReward.score_from_log_likelihoods` transforms those new
+values. Each reward's statistics record its own conditioning and token counts.
 
 For one pair, at the configured LM batch size of one, the work is normally:
 
-1. One reference-under-prompt sequence, unless its baseline is cached.
-2. Two reference-under-prompt-and-candidate sequences.
-3. Two candidate-under-prompt sequences for self-certainty.
+1. One reference-under-task-prompt sequence, unless its baseline is cached.
+2. Two reference-under-generic-prompt-and-candidate sequences for reference likelihood.
+3. Two reference-under-task-prompt-and-example sequences for VR-CLI.
+4. Two candidate-under-generic-prompt sequences for self-certainty.
 
-VR-CLI's transformation adds no further model call. Baselines are persisted
+The task-specific variant adds two conditioned sequence evaluations per pair
+compared with the earlier shared-prompt implementation; the arithmetic
+transformation adds no model call. Baselines are persisted
 per worker shard and keyed by a digest of the exact no-candidate context and
 reference text. Worker identity checks bind that cache to the run's model and
 scoring settings. The GPU run saved 3,227 unique baseline evaluations across

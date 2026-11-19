@@ -7,10 +7,42 @@ The candidate summary/story substitutes for the paper's generated plan.
 
 import math
 from collections.abc import Callable, Sequence
+from functools import partial
+from typing import Literal
 
 from .base import checked_scores, validate_inputs
 from .causal_lm import CausalLMScorer
-from .reference_likelihood import reference_context
+
+Task = Literal["summarization", "story_generation"]
+
+
+def vr_cli_context(prompt: str, candidate: str | None, *, task: Task) -> str:
+    """Condition on a task and optional candidate; the reference stays the target.
+
+    Baseline and conditioned contexts differ only by the example block. For
+    instruction-tuned models, wrap this content in the model's chat template.
+    """
+    if task == "summarization":
+        content = (
+            "Write an accurate, concise summary of the source text below.\n\n"
+            f"Source text:\n{prompt}\n\n"
+        )
+        if candidate is not None:
+            content += (
+                f"Here is an example summary of the same source text:\n{candidate}\n\n"
+            )
+        return content + "Now write a summary of the source text:\n"
+    if task == "story_generation":
+        content = (
+            "Write a standalone story that responds to the writing prompt below.\n\n"
+            f"Writing prompt:\n{prompt}\n\n"
+        )
+        if candidate is not None:
+            content += (
+                f"Here is an example story for the same writing prompt:\n{candidate}\n\n"
+            )
+        return content + "Now write a standalone story for the writing prompt:\n"
+    raise ValueError("task must be 'summarization' or 'story_generation'")
 
 
 def perplexity_improvement(conditioned_logp: float, baseline_logp: float) -> float:
@@ -33,21 +65,26 @@ class VRCLIReward:
 
     Negative improvements remain negative; no thresholds or clipping apply.
     For a shared baseline, rankings match conditioned mean log likelihoods
-    (up to floating-point precision and downstream tie tolerances).
+    computed with the same context, up to floating-point precision and
+    downstream tie tolerances. Defaults to summary instructions; select
+    task='story_generation' for stories or supply a custom context builder.
     Baselines are deduplicated within a call, but never cached across calls,
     so sharing a scorer whose weights change cannot reuse stale baselines.
     """
 
-    variant = "continuous"
+    variant = "continuous_task_specific"
 
     def __init__(
         self,
         scorer: CausalLMScorer,
         *,
-        context_builder: Callable[[str, str | None], str] = reference_context,
+        task: Task = "summarization",
+        context_builder: Callable[[str, str | None], str] | None = None,
     ) -> None:
+        if task not in ("summarization", "story_generation"):
+            raise ValueError("task must be 'summarization' or 'story_generation'")
         self.scorer = scorer
-        self.context_builder = context_builder
+        self.context_builder = context_builder or partial(vr_cli_context, task=task)
 
     def score_from_log_likelihoods(
         self, conditioned: Sequence[float], baselines: Sequence[float]

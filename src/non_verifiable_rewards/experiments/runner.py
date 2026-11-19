@@ -17,7 +17,7 @@ from ..rewards import (
     RougeLReward,
     VRCLIReward,
 )
-from ..rewards.vr_cli import perplexity_improvement
+from ..rewards.vr_cli import vr_cli_context
 from .assets import model_paths
 from .io import (
     BACKEND_REWARDS,
@@ -51,6 +51,19 @@ def chat_context(tokenizer, prompt, candidate=None):
     content = prompt
     if candidate:
         content += "\n\nUse this candidate response as context:\n" + candidate
+    return tokenizer.apply_chat_template(
+        [{"role": "user", "content": content}],
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+
+
+def vrcli_chat_context(tokenizer, dataset, prompt, candidate=None):
+    tasks = {"reddit_tldr": "summarization", "litbench": "story_generation"}
+    if dataset not in tasks:
+        raise ValueError(f"No VR-CLI task prompt defined for dataset {dataset!r}")
+    content = vr_cli_context(prompt, candidate, task=tasks[dataset])
     return tokenizer.apply_chat_template(
         [{"role": "user", "content": content}],
         tokenize=False,
@@ -193,7 +206,9 @@ class Backend:
             values[self.name] = self.reward.score(candidates, references=references)
         else:
             tokenizer = self.scorer.tokenizer
-            baseline_context = chat_context(tokenizer, pair["prompt"])
+            baseline_context = vrcli_chat_context(
+                tokenizer, pair["dataset"], pair["prompt"]
+            )
             key = digest([baseline_context, pair["reference"]])
             start = time.perf_counter()
             cached = baseline_journal.completed.get(key)
@@ -223,36 +238,60 @@ class Backend:
             )
             timings["conditioned_seconds"] = time.perf_counter() - start
             values["reference_likelihood"] = conditioned
+            vr_contexts = [
+                vrcli_chat_context(tokenizer, pair["dataset"], pair["prompt"], candidate)
+                for candidate in candidates
+            ]
+            start = time.perf_counter()
+            vr_conditioned = self.scorer.log_likelihood(
+                vr_contexts, references, reduction="mean"
+            )
+            timings["vr_cli_conditioned_seconds"] = time.perf_counter() - start
             values["vr_cli"] = self.vr_cli.score_from_log_likelihoods(
-                conditioned, [baseline] * 2
+                vr_conditioned, [baseline] * 2
             )
             start = time.perf_counter()
+            certainty_context = chat_context(tokenizer, pair["prompt"])
             values["self_certainty"] = self.scorer.self_certainty(
-                [baseline_context] * 2, candidates
+                [certainty_context] * 2, candidates
             )
             timings["self_certainty_seconds"] = time.perf_counter() - start
             reference_tokens = len(
                 tokenizer.encode(pair["reference"], add_special_tokens=False)
             )
+            details = {reward: {} for reward in values}
             for index, side in enumerate(("preferred", "rejected")):
-                improvement = perplexity_improvement(conditioned[index], baseline)
-                details[side] = {
-                    "vr_cli_variant": self.vr_cli.variant,
+                candidate_tokens = len(
+                    tokenizer.encode(candidates[index], add_special_tokens=False)
+                )
+                details["reference_likelihood"][side] = {
                     "conditioned_logp_mean": conditioned[index],
-                    "baseline_logp_mean": baseline,
                     "conditioned_logp_sum": conditioned[index] * reference_tokens,
-                    "baseline_logp_sum": baseline * reference_tokens,
                     "reference_tokens": reference_tokens,
-                    "perplexity_improvement_percent": improvement
-                    if math.isfinite(improvement)
-                    else None,
-                    "improvement_overflow": not math.isfinite(improvement),
                     "conditioning_tokens": len(
                         tokenizer.encode(contexts[index], add_special_tokens=False)
                     ),
-                    "candidate_tokens": len(
-                        tokenizer.encode(candidates[index], add_special_tokens=False)
+                    "candidate_tokens": candidate_tokens,
+                }
+                details["vr_cli"][side] = {
+                    "vr_cli_variant": self.vr_cli.variant,
+                    "conditioned_logp_mean": vr_conditioned[index],
+                    "baseline_logp_mean": baseline,
+                    "conditioned_logp_sum": vr_conditioned[index] * reference_tokens,
+                    "baseline_logp_sum": baseline * reference_tokens,
+                    "reference_tokens": reference_tokens,
+                    "perplexity_improvement_percent": values["vr_cli"][index],
+                    "improvement_overflow": False,
+                    "conditioning_tokens": len(
+                        tokenizer.encode(vr_contexts[index], add_special_tokens=False)
                     ),
+                    "candidate_tokens": candidate_tokens,
+                }
+                details["self_certainty"][side] = {
+                    "conditioning_tokens": len(
+                        tokenizer.encode(certainty_context, add_special_tokens=False)
+                    ),
+                    "candidate_tokens": candidate_tokens,
                 }
         native = self.native_truncation(pair)
         rows = []
@@ -296,7 +335,7 @@ class Backend:
                         ]
                         if self.name != "lexical"
                         else False,
-                        "statistics": details.get(side, {}),
+                        "statistics": details.get(reward, {}).get(side, {}),
                     }
                 )
         return rows, timings

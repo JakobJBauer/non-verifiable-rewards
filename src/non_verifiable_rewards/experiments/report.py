@@ -260,8 +260,13 @@ def length_figure(result, config):
 
 def vrcli_figure(result, config):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    variant_label = (
+        "task prompts"
+        if result["vr_cli_variant"] == "continuous_task_specific"
+        else result["vr_cli_variant"]
+    )
     fig.suptitle(
-        f"VR-CLI ({result['vr_cli_variant']}): improvement and preference margins",
+        f"VR-CLI ({variant_label}): improvement and preference margins",
         fontsize=17,
         fontweight="bold",
     )
@@ -520,15 +525,16 @@ def write_reports(result, config):
         "Reddit references are original human TL;DRs joined by post ID with matching post text. Pairs containing the reference itself are excluded. LitBench references are the highest-upvote distinct story outside the pair; maximum observed upvotes resolve varying scraped counts.",
         "The length baseline counts full-output words. ROUGE-L uses full texts. Neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. Human preferences refer to the full original outputs.",
         limits,
-        "Reference likelihood uses mean reference-token log probability. VR-CLI reuses it and the no-candidate baseline to compute percent perplexity improvement. Policy and frozen scorers coincide here because they share the same checkpoint.",
+        "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. Policy and frozen scorers coincide here because they share the same checkpoint.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
     ]
     if "vr_cli" in result["rewards"]:
-        notes.append(
-            "This run uses continuous VR-CLI: the percent perplexity improvement is the reward, without thresholds or clipping. For a shared baseline it has the same mathematical pairwise ordering as reference likelihood; floating-point precision and tie tolerance can still produce ties. This is an unthresholded adaptation of the published reward."
-            if result["vr_cli_variant"] == "continuous"
-            else "This historical run uses thresholded VR-CLI: the published cutoffs at 0.05%, 1%, and 2% map improvement to rewards 0, 0.5, 0.9, and 1. Saved scores have not been converted to the continuous variant."
-        )
+        vr_notes = {
+            "continuous_task_specific": "This run uses continuous VR-CLI with task-specific summary/story instructions. The candidate is an example in the prompt; the held-out reference is the scored continuation. The no-candidate baseline uses the same task instruction. VR-CLI requires separate likelihood evaluations and can rank candidates differently from the generic reference-likelihood benchmark. This is an unthresholded adaptation of the published reward; better preference accuracy is not established by the prompt change alone.",
+            "continuous": "This run uses continuous VR-CLI with the original generic conditioning: percent perplexity improvement is the reward, without thresholds or clipping. For a shared baseline it has the same mathematical pairwise ordering as the reference-likelihood benchmark; floating-point precision and tie tolerance can still produce ties.",
+            "thresholded": "This historical run uses thresholded VR-CLI: the published cutoffs at 0.05%, 1%, and 2% map improvement to rewards 0, 0.5, 0.9, and 1. Saved scores have not been converted to the continuous variant.",
+        }
+        notes.append(vr_notes[result["vr_cli_variant"]])
     if config["pilot"]:
         notes.insert(
             0,
@@ -556,7 +562,7 @@ def write_reports(result, config):
         if "vr_cli" in result["rewards"]:
             vr = frame[frame.reward == "vr_cli"].iloc[0]
             findings.append(
-                f"{DATASET_LABELS[name]}: {result['vr_cli_variant'].capitalize()} VR-CLI ties on {vr.tie_rate:.1%} of pairs."
+                f"{DATASET_LABELS[name]}: {result['vr_cli_variant'].replace('_', ' ').capitalize()} VR-CLI ties on {vr.tie_rate:.1%} of pairs."
             )
     if "reference_likelihood" not in result["rewards"]:
         notes.insert(

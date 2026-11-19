@@ -27,7 +27,11 @@ from non_verifiable_rewards.experiments.io import (
     write_json,
     write_jsonl,
 )
-from non_verifiable_rewards.experiments.runner import Backend
+from non_verifiable_rewards.experiments.runner import (
+    Backend,
+    chat_context,
+    vrcli_chat_context,
+)
 from non_verifiable_rewards.experiments.smoke import (
     PILOT_REWARDS,
     lm_mode,
@@ -160,9 +164,12 @@ def test_lexical_scores_use_full_original_outputs():
 
 
 @pytest.mark.parametrize("conditioned", [(-3.2, -3.4), (-1, -2)])
-def test_lm_backend_records_continuous_vrcli_without_bucket_ties(tmp_path, conditioned):
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_lm_backend_uses_separate_task_likelihoods_for_vrcli(
+    tmp_path, conditioned, dataset
+):
     pair = make_pair(
-        "reddit_tldr", "p", "Prompt", "better", "worse", "Reference", "ref", {}
+        dataset, "p", "Prompt", "better", "worse", "Reference", "ref", {}
     )
     pair["lengths"] = {
         field: {"original_words": 1, "scored_words": 1, "truncated": False}
@@ -180,11 +187,22 @@ def test_lm_backend_records_continuous_vrcli_without_bucket_ties(tmp_path, condi
     class Scorer:
         tokenizer = Tokenizer()
 
+        def __init__(self):
+            self.calls = []
+
         def log_likelihood(self, contexts, references, *, reduction):
             assert reduction == "mean"
-            return [-3] if len(contexts) == 1 else list(conditioned)
+            assert references == ["Reference"] * len(contexts)
+            assert all("Reference" not in context for context in contexts)
+            self.calls.append(contexts)
+            if len(contexts) == 1:
+                return [-3]
+            if "Here is an example" in contexts[0]:
+                return list(conditioned)
+            return [-4, -3]  # The generic prompt can have the opposite ordering.
 
         def self_certainty(self, contexts, candidates):
+            assert contexts == [chat_context(self.tokenizer, "Prompt")] * 2
             return [0.4] * len(candidates)
 
     engine = Backend.__new__(Backend)
@@ -192,14 +210,38 @@ def test_lm_backend_records_continuous_vrcli_without_bucket_ties(tmp_path, condi
     engine.vr_cli = VRCLIReward(engine.scorer)
     with Journal(tmp_path / "baselines.jsonl") as baselines:
         rows, _ = engine.evaluate(pair, pair, baselines)
+        repeated, timing = engine.evaluate(pair, pair, baselines)
+        assert repeated == rows
+        assert timing["baseline_cache_hit"]
+        other = {
+            **pair,
+            "dataset": "litbench" if dataset == "reddit_tldr" else "reddit_tldr",
+        }
+        _, timing = engine.evaluate(other, other, baselines)
+        assert not timing["baseline_cache_hit"]  # Different task needs its own baseline.
     vr = [row for row in rows if row["reward"] == "vr_cli"]
+    generic = [row for row in rows if row["reward"] == "reference_likelihood"]
     expected = [100 * (1 - math.exp(-3 - value)) for value in conditioned]
     assert [row["score"] for row in vr] == pytest.approx(expected)
     assert vr[0]["score"] > vr[1]["score"]
-    assert all(row["statistics"]["vr_cli_variant"] == "continuous" for row in vr)
+    assert all(
+        row["statistics"]["vr_cli_variant"] == "continuous_task_specific" for row in vr
+    )
     assert all(
         row["score"] == row["statistics"]["perplexity_improvement_percent"] for row in vr
     )
+    assert [row["score"] for row in generic] == [-4, -3]
+    assert [row["statistics"]["conditioned_logp_mean"] for row in generic] == [-4, -3]
+    assert [row["statistics"]["conditioned_logp_mean"] for row in vr] == list(
+        conditioned
+    )
+    context = engine.scorer.calls[2][0]
+    assert ("summary" if dataset == "reddit_tldr" else "story") in context
+
+
+def test_vrcli_rejects_unrecognized_dataset():
+    with pytest.raises(ValueError, match="No VR-CLI task prompt"):
+        vrcli_chat_context(None, "unknown", "Prompt")
 
 
 @pytest.fixture
@@ -274,8 +316,9 @@ def test_analysis_preserves_ties_and_undefined_constant_correlations(synthetic_r
 
 
 @pytest.mark.parametrize("mixed", [False, True])
+@pytest.mark.parametrize("variant", ["continuous", "continuous_task_specific"])
 def test_analysis_identifies_continuous_vrcli_and_rejects_mixed_runs(
-    synthetic_run, mixed
+    synthetic_run, mixed, variant
 ):
     root = Path(synthetic_run["run_dir"]) / "scores" / "lm"
     for path in root.glob("*.jsonl"):
@@ -284,17 +327,44 @@ def test_analysis_identifies_continuous_vrcli_and_rejects_mixed_runs(
             for row in record["rows"]:
                 if row["reward"] == "vr_cli" and (not mixed or index == 0):
                     row["score"] = 10 if row["side"] == "preferred" else 5
-                    row["statistics"]["vr_cli_variant"] = "continuous"
+                    row["statistics"]["vr_cli_variant"] = variant
         write_jsonl(path, records)
     if mixed:
         with pytest.raises(ValueError, match="Mixed or unknown VR-CLI variants"):
             analyze(synthetic_run)
     else:
         result = analyze(synthetic_run)
-        assert result["vr_cli_variant"] == "continuous"
+        assert result["vr_cli_variant"] == variant
         vr = result["summary"].query("reward == 'vr_cli'")
         assert vr.accuracy.tolist() == [1, 1]
         assert vr.tie_rate.tolist() == [0, 0]
+
+
+def test_vrcli_diagnostics_check_its_own_prompt_likelihoods(synthetic_run):
+    import pandas as pd
+
+    from non_verifiable_rewards.experiments.supplementary import supplementary
+
+    run = Path(synthetic_run["run_dir"])
+    write_json(run / "config.json", synthetic_run)
+    for path in (run / "scores" / "lm").glob("*.jsonl"):
+        records = read_jsonl(path)
+        for record in records:
+            for row in record["rows"]:
+                if row["reward"] == "vr_cli":
+                    row["score"] = -20 if row["side"] == "preferred" else -10
+                    row["statistics"] = {
+                        "vr_cli_variant": "continuous_task_specific",
+                        "conditioned_logp_mean": -3 - math.log1p(-row["score"] / 100),
+                    }
+        write_jsonl(path, records)
+    analyze(synthetic_run)
+    supplementary(run, run)
+    diagnostics = pd.read_csv(run / "tables" / "vr_cli_information_loss.csv")
+    assert diagnostics.ranking_inversions.eq(0).all()
+    assert diagnostics.generic_likelihood_decision_agreement.eq(0).all()
+    assert diagnostics.raw_likelihood_accuracy.eq(0).all()
+    assert diagnostics.vr_cli_accuracy.eq(0).all()
 
 
 def test_analysis_rejects_overlapping_shards(synthetic_run):

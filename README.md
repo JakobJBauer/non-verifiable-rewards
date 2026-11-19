@@ -241,6 +241,7 @@ pairs; raw likelihoods also vary with reference length and prompt difficulty.
 from non_verifiable_rewards.rewards import (
     CausalLMScorer, ReferenceLikelihoodReward, SelfCertaintyReward, VRCLIReward,
 )
+from non_verifiable_rewards.rewards.vr_cli import vr_cli_context
 
 lm = CausalLMScorer.from_pretrained(
     "Qwen/Qwen3-4B",
@@ -261,8 +262,18 @@ def reference_context(prompt: str, candidate: str | None) -> str:
         enable_thinking=False,
     )
 
+def summary_context(prompt: str, candidate: str | None) -> str:
+    return lm.tokenizer.apply_chat_template(
+        [{"role": "user", "content": vr_cli_context(
+            prompt, candidate, task="summarization"
+        )}],
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+
 likelihood = ReferenceLikelihoodReward(lm, context_builder=reference_context)
-vr_cli = VRCLIReward(lm, context_builder=reference_context)
+vr_cli = VRCLIReward(lm, context_builder=summary_context)
 certainty = SelfCertaintyReward(
     lm, context_builder=lambda prompt: reference_context(prompt, None)
 )
@@ -272,11 +283,36 @@ vr_cli_scores = vr_cli.score(**batch)
 certainty_scores = certainty.score(**batch)
 ```
 
-Without a custom context builder, likelihood and VR-CLI use a plain-text prompt,
-an optional `Candidate response:` section, and a `Response:` delimiter. Their
-builders receive `None` for the no-candidate baseline. Self-certainty's default
-context is the prompt followed by a newline. The reference is scored as the
-continuation; it is never interpolated into the conditioning prompt.
+Without a custom context builder, reference likelihood uses a plain-text prompt,
+an optional `Candidate response:` section, and a `Response:` delimiter. VR-CLI
+uses a task-specific plain-text template: `task="summarization"` by default, or
+`task="story_generation"` for stories. Its builder receives `None` for the
+no-candidate baseline. Self-certainty's default context is the prompt followed
+by a newline. The reference remains the scored continuation; it is never
+interpolated into the conditioning prompt.
+
+The benchmark selects summary instructions for Reddit and story instructions
+for LitBench, wrapped in Qwen's chat template. For summaries, the content is:
+
+```text
+Write an accurate, concise summary of the source text below.
+
+Source text:
+{prompt}
+
+Here is an example summary of the same source text:
+{candidate}
+
+Now write a summary of the source text:
+```
+
+The baseline omits only the example-summary block. The story template uses
+the writing prompt, an example story, and a request for a standalone story.
+These are prompt-only adaptations: putting the held-out reference in the
+prompt and scoring the candidate instead would reverse the scoring direction
+and define a different reward. Task-specific wording may help, but neither
+higher perplexity improvement nor better preference accuracy is guaranteed;
+the independent-story reference limitation on LitBench remains.
 
 The shared scorer uses evaluation mode and `torch.inference_mode()`. It scores
 the first through last target tokens with the causal shift, masks context and
@@ -302,17 +338,23 @@ constructor arguments have been removed. Nonfinite improvements from extreme
 numeric overflow raise an error instead of creating a tied floor.
 
 For a pair sharing one baseline/reference, this transformation is strictly
-increasing in conditioned mean log probability, so its mathematical ordering
-matches reference likelihood. It restores resolution, not an independent
-preference signal; numerical precision and the configured tie tolerance still
-apply. Recalculating from the frozen 2,000-pair scores per dataset removes all
-VR-CLI ties (previously 73.1% on Reddit and 70.75% on LitBench). Accuracy becomes
-44.25% and 49.90%, respectively, exactly matching reference likelihood. This
-change does not promise improved agreement with human preferences.
+increasing in conditioned mean log probability **under the same prompt**.
+VR-CLI now uses different instructions from the generic reference-likelihood
+benchmark, so their rankings can differ. The worker runs separate conditioned
+likelihood evaluations and stores their statistics separately. Numerical
+precision and the configured tie tolerance still apply.
+
+With the former generic prompts, removing thresholds from the frozen
+2,000-pair scores per dataset removed all VR-CLI ties and yielded accuracies
+of 44.25% on Reddit and 49.90% on LitBench, matching generic reference
+likelihood. Those figures do not evaluate the new prompts. Their effect needs
+fresh model inference and a paired comparison on a fixed evaluation set;
+choose wording on development data rather than tuning it to the test labels.
 
 The saved November 2026 runs and audits retain their original thresholded
-scores. New scores record `statistics.vr_cli_variant = "continuous"`; reports
-identify unmarked historical scores as thresholded and reject mixed variants.
+scores. New scores record `statistics.vr_cli_variant = "continuous_task_specific"`;
+`"continuous"` identifies the earlier generic-prompt variant. Reports identify
+unmarked historical scores as thresholded and reject mixed variants.
 Use a new run directory when scoring with the new implementation.
 
 Baselines shared by pairs are computed once per scoring

@@ -121,7 +121,8 @@ def vrcli_variant(scores):
     variants = rows.get(
         "statistics.vr_cli_variant", pd.Series("thresholded", index=rows.index)
     ).fillna("thresholded")
-    if variants.nunique() != 1 or not variants.isin(("continuous", "thresholded")).all():
+    known = ("continuous_task_specific", "continuous", "thresholded")
+    if variants.nunique() != 1 or not variants.isin(known).all():
         raise ValueError("Mixed or unknown VR-CLI variants; use separate run directories")
     return variants.iloc[0]
 

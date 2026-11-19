@@ -116,7 +116,23 @@ def supplementary(run_dir, pilot_dir):
                 )
 
         if "vr_cli" in rewards:
-            raw = preference_credit(frame.reference_likelihood, config["tie_tolerance"])
+            # Monotonicity applies to the likelihoods under VR-CLI's own prompt.
+            # The generic reference-likelihood benchmark may rank pairs differently.
+            if variant == "continuous_task_specific":
+                vr_scores = scores[
+                    (scores.dataset == dataset)
+                    & (scores.reward == "vr_cli")
+                    & (scores.status == "ok")
+                ]
+                likelihoods = vr_scores.pivot(
+                    index="pair_id",
+                    columns="side",
+                    values="statistics.conditioned_logp_mean",
+                ).reindex(frame.index)
+                raw_margins = likelihoods.preferred - likelihoods.rejected
+            else:
+                raw_margins = frame.reference_likelihood
+            raw = preference_credit(raw_margins, config["tie_tolerance"])
             vr = preference_credit(frame.vr_cli, config["tie_tolerance"])
             inversions = int(
                 ((raw == 1) & (vr == 0) | (raw == 0) & (vr == 1)).sum()
@@ -129,6 +145,12 @@ def supplementary(run_dir, pilot_dir):
                     "raw_likelihood_accuracy": raw.mean(),
                     "vr_cli_accuracy": vr.mean(),
                     "vr_cli_tie_rate": (vr == 0.5).mean(),
+                    "generic_likelihood_decision_agreement": (
+                        preference_credit(
+                            frame.reference_likelihood, config["tie_tolerance"]
+                        )
+                        == vr
+                    ).mean(),
                     "raw_correct_collapsed_to_tie": int(
                         ((raw == 1) & (vr == 0.5)).sum()
                     ),

@@ -8,7 +8,7 @@ from non_verifiable_rewards.rewards import (
     VRCLIReward,
 )
 from non_verifiable_rewards.rewards.reference_likelihood import reference_context
-from non_verifiable_rewards.rewards.vr_cli import perplexity_improvement
+from non_verifiable_rewards.rewards.vr_cli import perplexity_improvement, vr_cli_context
 
 
 class RecordingScorer:
@@ -18,7 +18,10 @@ class RecordingScorer:
     def log_likelihood(self, contexts, continuations, *, reduction):
         self.calls.append((contexts, continuations, reduction))
         return [
-            -1.0 if "Candidate response:" in context else -2.0 for context in contexts
+            -1.0
+            if "Candidate response:" in context or "Here is an example" in context
+            else -2.0
+            for context in contexts
         ]
 
     def self_certainty(self, contexts, continuations):
@@ -57,12 +60,49 @@ def test_vrcli_reuses_baseline_within_call_and_keys_by_reference():
     assert reward.score(**kwargs) == pytest.approx([100 * (1 - math.exp(-1))] * 3)
     assert scorer.calls[0][1:] == (["gold", "gold", "other"], "mean")
     assert scorer.calls[1] == (
-        [reference_context("input", None)] * 2,
+        [vr_cli_context("input", None, task="summarization")] * 2,
         ["gold", "other"],
         "mean",
     )
     reward.score(**kwargs)
     assert len(scorer.calls) == 4  # No stale cross-call cache if model weights change.
+
+
+@pytest.mark.parametrize(
+    "task,example,instruction",
+    [
+        ("summarization", "summary of the same source text", "summary of the source text"),
+        (
+            "story_generation",
+            "story for the same writing prompt",
+            "standalone story for the writing prompt",
+        ),
+    ],
+)
+def test_vrcli_task_prompt_keeps_reference_as_target(task, example, instruction):
+    scorer = RecordingScorer()
+    reward = VRCLIReward(scorer, task=task)
+    reward.score(["candidate"], references=["held-out reference"], prompts=["source"])
+    conditioned, targets, reduction = scorer.calls[0]
+    baseline, baseline_targets, baseline_reduction = scorer.calls[1]
+    block = f"Here is an example {example}:\ncandidate\n\n"
+    assert block in conditioned[0]
+    assert conditioned[0].replace(block, "") == baseline[0]
+    assert conditioned[0].endswith(f"Now write a {instruction}:\n")
+    assert "held-out reference" not in conditioned[0]
+    assert "held-out reference" not in baseline[0]
+    assert "source" in conditioned[0]
+    assert targets == baseline_targets == ["held-out reference"]
+    assert reduction == baseline_reduction == "mean"
+
+
+def test_vrcli_rejects_unknown_task_and_accepts_custom_context():
+    with pytest.raises(ValueError, match="task must"):
+        VRCLIReward(RecordingScorer(), task="unknown")
+    scorer = RecordingScorer()
+    reward = VRCLIReward(scorer, context_builder=reference_context)
+    reward.score(["candidate"], references=["gold"], prompts=["input"])
+    assert scorer.calls[0][0] == [reference_context("input", "candidate")]
 
 
 @pytest.mark.parametrize(

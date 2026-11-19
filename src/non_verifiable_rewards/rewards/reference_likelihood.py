@@ -8,7 +8,7 @@ from .causal_lm import CausalLMScorer
 
 
 def reference_context(prompt: str, candidate: str | None) -> str:
-    """Plain-text conditioning shared by reference likelihood and VR-CLI.
+    """Plain-text conditioning for the generic reference-likelihood baseline.
 
     ``None`` denotes the no-candidate baseline. For an instruction-tuned model,
     supply a builder using that model's chat template (see the README).
