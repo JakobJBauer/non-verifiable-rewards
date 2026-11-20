@@ -182,8 +182,16 @@ def heatmaps(result, config):
             1,
         ),
     ):
-        fig, axes = plt.subplots(1, len(result["datasets"]), figsize=(7.5 * len(result["datasets"]), 7), squeeze=False)
-        axes = axes[0]
+        # Thirteen annotated columns become illegible when three panels are
+        # shrunk side by side to the HTML report's page width.
+        stacked = len(rewards) > 10 and len(result["datasets"]) > 1
+        rows, columns = (len(result["datasets"]), 1) if stacked else (1, len(result["datasets"]))
+        fig, axes = plt.subplots(
+            rows, columns,
+            figsize=(10, 8.8 * rows) if stacked else (7.5 * columns, 7),
+            squeeze=False,
+        )
+        axes = axes.ravel()
         fig.suptitle(title, fontsize=17, fontweight="bold")
         for ax, name in zip(axes, result["datasets"], strict=True):
             matrix = result[key][name].loc[list(rewards), list(rewards)].to_numpy()
@@ -220,7 +228,7 @@ def heatmaps(result, config):
             ax.set_yticks(range(len(rewards)), names, fontsize=10)
             ax.set_title(DATASET_LABELS[name])
             fig.colorbar(picture, ax=ax, fraction=0.046, pad=0.03)
-        save_figure(fig, filename, config)
+        save_figure(fig, filename, config, bottom=0.035 if stacked else 0.09)
 
 
 def length_figure(result, config):
@@ -411,7 +419,7 @@ def smoke_figure(config):
 
 def coverage_figure(result, config):
     rewards = result["rewards"]
-    fig, axes = plt.subplots(2, 1, figsize=(12, 6.2))
+    fig, axes = plt.subplots(2, 1, figsize=(max(12, len(rewards)), 7.5))
     fig.suptitle("Which scores used shortened inputs?", fontsize=17, fontweight="bold")
     for ax, field, title in zip(
         axes,
@@ -450,6 +458,8 @@ def coverage_figure(result, config):
                 for reward in rewards
             ],
             fontsize=10,
+            rotation=35,
+            ha="right",
         )
         ax.set_title(title, fontsize=12)
     save_figure(fig, "input_coverage", config)
@@ -702,15 +712,30 @@ def write_reports(result, config):
                 f"{DATASET_LABELS[name]}: {result['vr_cli_variant'].replace('_', ' ').capitalize()} VR-CLI ties on {vr.tie_rate:.1%} of pairs."
             )
     if "reference_likelihood" not in result["rewards"]:
+        scope_path = run / "evaluation_scope.json"
+        scope_reason = (
+            json.loads(scope_path.read_text()).get("reason")
+            if scope_path.exists() else None
+        )
         notes.insert(
             1,
+            scope_reason or (
             "Qwen is excluded from the primary benchmark because local LM evaluation was limited. "
             + (
                 "One successful pair is displayed as an execution smoke check. "
                 if (run / "qwen_smoke_check.json").exists()
                 else "No successful LM smoke check was recorded. "
             )
-            + "Any partial LM outputs are retained but excluded from accuracy, correlations, and cost comparisons. See evaluation_scope.json for the saved scope.",
+            + "Any partial LM outputs are retained but excluded from accuracy, correlations, and cost comparisons. See evaluation_scope.json for the saved scope."),
+        )
+    if (run / "subset_selection.json").exists():
+        notes.insert(
+            0,
+            "Runtime-limited comparison: all thirteen rewards use the same fixed "
+            "100 pairs per dataset, taken from the original shuffled test samples. "
+            "Full 2,000-pair BERTScore and inexpensive-baseline results are retained "
+            "separately. The smaller comparison has wider uncertainty; do not treat "
+            "small differences in point estimates as established rankings."
         )
     figures = [
         ("pairwise_accuracy", "Preference agreement"),
@@ -790,6 +815,9 @@ def write_reports(result, config):
 
 def generate_report(config):
     config = dict(config)
+    scope_path = Path(config["run_dir"]) / "evaluation_scope.json"
+    if scope_path.exists():
+        config["name"] = json.loads(scope_path.read_text()).get("title", config["name"])
     plt.rcParams.update(
         {
             "font.family": "DejaVu Sans",

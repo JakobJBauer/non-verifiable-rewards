@@ -46,6 +46,16 @@ The initial slow attempt remains in `qwen3_4b_all_rewards_20261120`; the fresh
 run with these scoring settings uses `qwen3_4b_all_rewards_20261120_batched`.
 It reuses frozen inputs and pinned model assets, and recomputes every score.
 
+Under the subsequently requested two-hour reporting limit, SMART-BLEURT
+remained too costly on full stories. The final all-reward comparison therefore
+uses [`configs/eidf_qwen3_4b_all_rewards_100_20261120.toml`](../configs/eidf_qwen3_4b_all_rewards_100_20261120.toml):
+the same 100 fixed pairs per dataset for every reward, selected as the first 100
+in each original shuffled sample. `subset_selection.json` records the exact IDs.
+The full 2,000-pair BERTScore, SMART-BERTScore and inexpensive-baseline passes
+remain in the `_batched` run, whose explicit `evaluation_scope.json` excludes
+unfinished expensive passes. The smaller run uses the sequential launcher;
+its reference models, prompts and full-text policies are unchanged.
+
 [`scripts/bootstrap_eidf.sh`](../scripts/bootstrap_eidf.sh) is the complete
 setup entry point. It consolidates the successful commands from the original
 run, including the TensorFlow library-path fix. It installs and checks:
