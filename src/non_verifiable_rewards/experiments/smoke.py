@@ -19,7 +19,7 @@ from .io import (
     write_json,
 )
 
-PILOT_REWARDS = ("rouge_l", "bertscore", "bleurt", "length")
+PILOT_REWARDS = ("rouge_l", "chrf_pp", "bertscore", "bleurt", "length")
 
 
 def set_lm_scope(config, *, skip=False):
@@ -27,7 +27,9 @@ def set_lm_scope(config, *, skip=False):
     path = run / "evaluation_scope.json"
     scope = json.loads(path.read_text()) if path.exists() else {}
     scope.update(
-        benchmark_rewards=list(PILOT_REWARDS) + (
+        benchmark_rewards=[
+            reward for reward in PILOT_REWARDS if reward in run_rewards(run)
+        ] + (
             list(SMART_REWARDS) if config.get("include_smart_rewards", False) else []
         ),
         lm_mode="skip" if skip else "smoke",

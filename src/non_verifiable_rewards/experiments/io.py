@@ -20,6 +20,7 @@ SMART_REWARDS = ("smart1_bertscore", "smart1_bleurt")
 BACKENDS = ("lexical", "bertscore", "bleurt", "lm", *SMART_REWARDS)
 REWARDS = (
     "rouge_l",
+    "chrf_pp",
     "bertscore",
     "bleurt",
     "self_certainty",
@@ -28,10 +29,10 @@ REWARDS = (
     "nover",
     "length",
 )
-LEGACY_REWARDS = tuple(reward for reward in REWARDS if reward != "nover")
+LEGACY_REWARDS = tuple(reward for reward in REWARDS if reward not in ("nover", "chrf_pp"))
 ALL_REWARDS = (*REWARDS, *SMART_REWARDS)
 BACKEND_REWARDS = {
-    "lexical": ("rouge_l", "length"),
+    "lexical": ("rouge_l", "chrf_pp", "length"),
     "bertscore": ("bertscore",),
     "bleurt": ("bleurt",),
     "smart1_bertscore": ("smart1_bertscore",),

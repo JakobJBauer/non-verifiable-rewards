@@ -13,6 +13,7 @@ from ..rewards import (
     BERTScoreReward,
     BLEURTReward,
     CausalLMScorer,
+    ChrFPlusPlusReward,
     LengthReward,
     NOVERReward,
     RougeLReward,
@@ -65,6 +66,7 @@ class Backend:
         self.baselines = {}
         if name == "lexical":
             self.rouge, self.length = RougeLReward(), LengthReward()
+            self.chrf = ChrFPlusPlusReward()
         elif name in ("bertscore", "smart1_bertscore"):
             import torch
 
@@ -201,6 +203,13 @@ class Backend:
                 original_candidates, references=[original["reference"]] * 2
             )
             values["length"] = self.length.score(original_candidates)
+            values["chrf_pp"] = self.chrf.score(
+                original_candidates, references=[original["reference"]] * 2
+            )
+            details["chrf_pp"] = {
+                side: {"sacrebleu_signature": self.chrf.signature, "beta": 2, "scale": 100}
+                for side in ("preferred", "rejected")
+            }
         elif self.name in ("bertscore", "bleurt"):
             values[self.name] = self.reward.score(candidates, references=references)
         elif self.name in SMART_REWARDS:
@@ -375,6 +384,8 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
     if backend not in enabled_backends(config):
         raise ValueError(f"Backend {backend!r} is disabled; enable include_smart_rewards in a new run")
     run = ensure_run(config)
+    if backend == "lexical" and set(BACKEND_REWARDS[backend]) - set(run_rewards(run)):
+        raise ValueError("Lexical reward set changed; choose a new run_dir for scoring")
     if backend in SMART_REWARDS and backend not in run_rewards(run):
         raise ValueError("SMART reward set changed; choose a new run_dir for scoring")
     if backend == "lm" and set(BACKEND_REWARDS["lm"]) - set(run_rewards(run)):

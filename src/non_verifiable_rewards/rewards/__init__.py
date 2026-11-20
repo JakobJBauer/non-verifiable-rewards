@@ -4,6 +4,7 @@ from .base import Reward
 from .bertscore import BERTScoreReward
 from .bleurt import BLEURTReward
 from .causal_lm import CausalLMScorer
+from .chrf import ChrFPlusPlusReward
 from .length import LengthReward
 from .nover import NOVERReward
 from .reference_likelihood import ReferenceLikelihoodReward
@@ -16,6 +17,7 @@ __all__ = [
     "BERTScoreReward",
     "BLEURTReward",
     "CausalLMScorer",
+    "ChrFPlusPlusReward",
     "LengthReward",
     "NOVERReward",
     "ReferenceLikelihoodReward",

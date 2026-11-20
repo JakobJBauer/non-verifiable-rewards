@@ -21,6 +21,7 @@ from .io import DATASETS, REWARDS, code_files, file_sha256, utc_now, write_json
 logger = logging.getLogger(__name__)
 LABELS = {
     "rouge_l": "ROUGE-L",
+    "chrf_pp": "chrF++",
     "bertscore": "BERTScore",
     "bleurt": "BLEURT",
     "smart1_bertscore": "SMART-1 BERTScore",
@@ -36,7 +37,7 @@ COLORS = dict(
     zip(
         REWARDS,
         (
-            "#4477AA", "#228833", "#AA3377", "#AA8800",
+            "#4477AA", "#66CCEE", "#228833", "#AA3377", "#AA8800",
             "#EE7733", "#0099BB", "#8855AA", "#777777",
         ),
         strict=True,
@@ -51,7 +52,7 @@ def caption(config):
     if "reference_likelihood" not in config.get("report_rewards", REWARDS):
         text += " (Qwen: smoke check only)"
     if config["pilot"]:
-        text += "\nBase neural scores use capped text; SMART, ROUGE-L and length use full outputs. Pipeline validation only."
+        text += "\nBase neural scores use capped text; SMART and lexical rewards use full outputs. Pipeline validation only."
     else:
         text += "\nEncoder metrics may truncate; see coverage. Confidence intervals resample prompts."
     return text
@@ -342,7 +343,7 @@ def smoke_figure(config):
             0.5,
             0.5,
             "No completed Qwen smoke check\nLM inference was skipped or did not complete.\n"
-            "The primary benchmark contains ROUGE-L, BERTScore, BLEURT and length.",
+            "The primary benchmark contains the completed non-LM rewards.",
             ha="center",
             va="center",
             transform=ax.transAxes,
@@ -462,7 +463,11 @@ def runtime_figure(result, config):
         "Qwen: LM rewards (NOVER reuses likelihoods)"
         if "nover" in result["rewards"] else "Qwen: all 3 LM rewards"
     )
-    labels = ["ROUGE-L + length", "BERTScore", "BLEURT", lm_label]
+    lexical_label = (
+        "ROUGE-L + chrF++ + length"
+        if "chrf_pp" in result["rewards"] else "ROUGE-L + length"
+    )
+    labels = [lexical_label, "BERTScore", "BLEURT", lm_label]
     if "reference_likelihood" not in result["rewards"]:
         order, labels = order[:-1], labels[:-1]
     for reward in ("smart1_bertscore", "smart1_bleurt"):
@@ -577,6 +582,14 @@ def write_reports(result, config):
             "This negative-log-perplexity score rewards length at fixed likelihood. "
             "Completed candidates substitute for reasoning; group ranks, format gating, efficiency "
             "rewards, and policy/proxy synchronization are absent. This is an offline proxy, not full NOVER RL."
+        )
+    if "chrf_pp" in result["rewards"]:
+        notes.append(
+            "chrF++ scores full original candidates and references using SacreBLEU: "
+            "character n-grams through order 6, word n-grams through order 2, beta=2, "
+            "case-sensitive, no character whitespace, and effective-order averaging. "
+            "Each candidate is scored separately on the native 0–100 scale. "
+            "The SacreBLEU settings/version signature is saved with every score."
         )
     if (run / "derivation.json").exists():
         notes.append(

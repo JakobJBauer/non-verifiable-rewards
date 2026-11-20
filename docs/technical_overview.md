@@ -7,8 +7,8 @@ task-specific summary/story prompts shared by reference likelihood and NOVER.
 The scoring-source hash therefore
 differs from the recorded GPU workers, and saved results remain historical.
 
-The current project evaluates **seven rewards plus a length baseline**, including
-the NOVER proxy added after that run, on pre-existing
+The current project evaluates **eight rewards plus a length baseline** by default,
+including the NOVER proxy and chrF++ added after that run, on pre-existing
 preference pairs. It performs inference, comparison, and statistical analysis.
 There is no policy training, optimizer, GRPO implementation, generated rollout
 collection, LLM judge, or self-play in the current experiment.
@@ -43,7 +43,7 @@ rule for measuring their agreement; that is not implemented here.
 flowchart LR
     A[Raw comparisons and reference sources] --> B[Filter, build references, sample]
     B --> C[Frozen full-text pairs]
-    C --> D[ROUGE-L and length]
+    C --> D[ROUGE-L, chrF++ and length]
     C --> E[Save prepared neural text]
     E --> F[BERTScore, BLEURT, Qwen rewards]
     D --> G[Resumable score journals]
@@ -199,7 +199,7 @@ or model weights; neural metrics initialize lazily and reuse their models.
 | VR-CLI | Prompt, candidate, reference, plus a no-candidate baseline | Same Qwen3-4B |
 | Length | Candidate | Whitespace-separated word count |
 
-ROUGE-L, BERTScore, and BLEURT do not see the source prompt/post. Their evidence
+ROUGE-L, chrF++, BERTScore, and BLEURT do not see the source prompt/post. Their evidence
 about correctness comes through the reference. Self-certainty is reference-free
 at scoring time, but it is evaluated on the same reference-eligible sample as
 the other methods.
@@ -220,6 +220,28 @@ The actual tokenizer, normalization, stemming, and zero-overlap behavior come
 from Google's `rouge_score` library. The wrapper requests `rougeL` and returns
 its `fmeasure`. It uses the complete supplied texts, not ROUGE-Lsum or a
 sentence-level average. The reward is lexical overlap in the range [0, 1].
+
+### chrF++
+
+Source: [`rewards/chrf.py`](../src/non_verifiable_rewards/rewards/chrf.py).
+`ChrFPlusPlusReward` wraps [SacreBLEU's chrF implementation](https://github.com/mjpost/sacrebleu)
+with character orders 1–6, word orders 1–2, and beta=2. Word bigrams distinguish
+chrF++ from chrF and chrF+. For each available n-gram order, it computes clipped
+overlap precision and recall, averages these across effective orders, and returns
+`100 * 5 * P * R / (4 * P + R)`. With no overlap the score is zero.
+
+Each complete candidate/reference pair is one sentence-level scoring unit,
+even when the text spans multiple sentences. There is no corpus aggregation,
+stemming, model loading, external tokenization, or input truncation. Scoring is
+case-sensitive; whitespace is excluded from character n-grams; epsilon smoothing
+is disabled. Effective-order averaging ensures short exact matches score 100.
+The 0–100 scale is the native SacreBLEU scale and differs from ROUGE-L's 0–1.
+
+The lexical backend includes `chrf_pp` in new runs and saves the SacreBLEU
+signature (including package version), beta, and scale in each row's statistics.
+Historical environments without a reward list retain their original seven
+rewards; environments listing the later eight rewards also remain readable.
+Fresh scoring requires a new run directory when the lexical reward set changes.
 
 ## 5. BERTScore
 
@@ -689,7 +711,7 @@ their accuracy difference is not a causal estimate of truncation's effect.
 
 ## 12. Worker execution, resuming, and provenance
 
-There are four worker backends: `lexical` produces ROUGE-L and length;
+There are four default worker backends: `lexical` produces ROUGE-L, chrF++, and length;
 `bertscore` and `bleurt` each produce one reward; `lm` produces all four Qwen
 rewards. Models are loaded only when a worker finds pending pairs and are
 reused across both datasets.

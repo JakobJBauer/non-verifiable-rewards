@@ -56,6 +56,14 @@ and 50.75% on LitBench**, with strong length dependence. The separate
 correlations, paired uncertainty, and length diagnostics. Original GPU scores
 remain unchanged; the [assessment](docs/nover.md) explains the interpretation.
 
+chrF++ was evaluated on the same full texts using CPU scoring: **58.20% preference
+accuracy on Reddit and 51.80% on LitBench** (2,000 pairs each). Its separate
+[accuracy table](outputs/chrf_pp_20261120/summary.csv) and
+[reward correlations and decision agreement](outputs/chrf_pp_20261120/chrf_comparisons.csv)
+retain the other metrics' historical definitions. Scores, source hashes, settings,
+and a reproduction script are saved in `outputs/chrf_pp_20261120/`; original
+artifacts are unchanged.
+
 ## Run the experiments
 
 The experiment package loads reference-bearing pairs, freezes a seeded sample,
@@ -128,7 +136,8 @@ vote ties are broken by content hash. These decisions are recorded in each pair.
 | `scores/*/*.invocation-*.json`, `logs/` | Every worker invocation, package versions, peak memory, progress, and failures |
 | `source_at_*.tar.gz`, `artifacts.json` | Source snapshots and output checksums |
 
-All eight current scores are higher-is-better. Accuracy assigns 1 to a correct preference,
+All nine default scores are higher-is-better; the two SMART variants are optional.
+Accuracy assigns 1 to a correct preference,
 0 to an incorrect preference, and 0.5 to a tie. The report uses the common complete
 pair set for methods included in the benchmark, reports coverage and ties, and obtains paired 95% percentile intervals
 by resampling prompts. Correlations use score margins within each pair; raw score
@@ -136,7 +145,7 @@ levels from different reward scales are not compared. Constant rewards have an
 undefined correlation, displayed as `n/a`. Reference likelihood uses mean token
 log probability in the runner, with the sum and token count retained too.
 
-ROUGE-L and the word-length baseline use full texts. The local neural limits are
+ROUGE-L, chrF++, and the word-length baseline use full texts. The local neural limits are
 384 prompt tokens and 192 tokens each for candidates and references, measured
 with the Qwen tokenizer. BERTScore/BLEURT may further truncate to their own model
 limits. Every truncation is recorded and plotted. Human preferences still refer
@@ -191,7 +200,7 @@ the Python code itself.
 ## Install
 
 ```bash
-uv sync                         # Dataset utilities, ROUGE-L, length, and tests
+uv sync                         # Dataset utilities, ROUGE-L, chrF++, length, and tests
 uv sync --extra bertscore       # BERTScore encoder
 uv sync --extra lm              # Self-certainty, reference likelihood, VR-CLI, NOVER proxy
 uv sync --extra bleurt          # Official BLEURT TensorFlow implementation
@@ -229,6 +238,7 @@ lengths, and empty references raise errors.
 | Class / module | Score | Required inputs besides candidates |
 | --- | --- | --- |
 | `RougeLReward` / `rouge_l.py` | ROUGE-L F1, with stemming by default | references |
+| `ChrFPlusPlusReward` / `chrf.py` | Sentence-level chrF++ F2 on SacreBLEU's 0–100 scale | references |
 | `BERTScoreReward` / `bertscore.py` | BERTScore F1; `roberta-large`, no IDF or baseline rescaling by default | references |
 | `BLEURTReward` / `bleurt.py` | Raw learned regression score; not restricted to [0, 1] | references |
 | `SMART1BERTScoreReward` / `smart.py` | Reference-only SMART-1 F1 with BERTScore sentence matches; full text coverage | references |
@@ -243,7 +253,7 @@ For example, score both sides of a comparison against the **same independently
 selected reference**:
 
 ```python
-from non_verifiable_rewards.rewards import LengthReward, RougeLReward
+from non_verifiable_rewards.rewards import ChrFPlusPlusReward, LengthReward, RougeLReward
 
 batch = {
     "candidates": ["A cat sat on a mat.", "A dog ran through the park."],
@@ -252,11 +262,22 @@ batch = {
 }
 
 rouge_scores = RougeLReward().score(**batch)
+chrf_scores = ChrFPlusPlusReward().score(**batch)
 length_scores = LengthReward().score(**batch)
 # Assuming the first candidate is human-preferred, award half credit for ties.
 a, b = rouge_scores
 pairwise_credit = 1.0 if a > b else 0.5 if a == b else 0.0
 ```
+
+chrF++ uses SacreBLEU with character n-grams through order 6, word n-grams through
+order 2, and beta=2. It preserves case, excludes whitespace from character
+n-grams, and uses effective-order averaging for short texts without epsilon
+smoothing. Each candidate/reference pair is scored independently on full text;
+scores are not pooled across a batch. Empty candidates score zero, while empty
+references are rejected. The lexical worker records the SacreBLEU signature,
+beta, and scale for reproducibility. This adds a CPU metric without model downloads.
+Historical reports retain their recorded metric scope; use a new run directory
+to score the expanded lexical backend.
 
 Report tie rates along with accuracy. Continuous VR-CLI removes threshold-induced
 ties; identical scores and the numerical tie tolerance can still produce ties.

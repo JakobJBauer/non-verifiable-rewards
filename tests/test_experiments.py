@@ -164,6 +164,17 @@ def test_lexical_scores_use_full_original_outputs():
     assert values["length", "preferred"] == 4
     assert values["length", "rejected"] == 2
     assert values["rouge_l", "preferred"] == pytest.approx(6 / 7)
+    from non_verifiable_rewards.rewards import ChrFPlusPlusReward
+
+    expected = ChrFPlusPlusReward().score(
+        [original["preferred"], original["rejected"]],
+        references=[original["reference"]] * 2,
+    )
+    chrf = [row for row in rows if row["reward"] == "chrf_pp"]
+    assert [row["score"] for row in chrf] == expected
+    assert expected[0] != 100  # The truncated inputs would be identical.
+    assert all("nw:2" in row["statistics"]["sacrebleu_signature"] for row in chrf)
+    assert all(row["statistics"]["beta"] == 2 for row in chrf)
     assert all(not row["preprocessing_truncated"] for row in rows)
 
 
@@ -352,10 +363,12 @@ def legacy_run(synthetic_run):
     run = Path(synthetic_run["run_dir"])
     write_json(run / "config.json", synthetic_run)
     write_json(run / "environment.json", {"schema_version": 1})
-    for path in (run / "scores" / "lm").glob("*.jsonl"):
+    for path in (run / "scores").glob("*/*.jsonl"):
         records = read_jsonl(path)
         for record in records:
-            record["rows"] = [row for row in record["rows"] if row["reward"] != "nover"]
+            record["rows"] = [
+                row for row in record["rows"] if row["reward"] not in ("nover", "chrf_pp")
+            ]
             for row in record["rows"]:
                 if row["reward"] == "reference_likelihood":
                     row["score"] = -2 if row["side"] == "preferred" else -3
@@ -374,16 +387,37 @@ def test_legacy_reporting_and_smoke_remain_readable_but_new_runs_require_nover(l
     result = analyze(legacy_run)
     assert result["rewards"] == LEGACY_REWARDS
     assert "nover" not in set(result["coverage"].reward)
+    assert "chrf_pp" not in set(result["coverage"].reward)
     record = read_jsonl(run / "scores" / "lm" / "reddit_tldr-shard-00000-of-00001.jsonl")[0]
     write_json(run / "qwen_smoke_check.json", {"validation": record})
     assert smoke_check(legacy_run)["validation"] == record
     with pytest.raises(ValueError, match="LM reward set changed"):
         score(legacy_run, "lm")
+    with pytest.raises(ValueError, match="Lexical reward set changed"):
+        score(legacy_run, "lexical")
     write_json(run / "environment.json", {"rewards": REWARDS})
     with pytest.raises(ValueError, match="missing"):
         analyze(legacy_run)
     with pytest.raises(ValueError, match="incomplete"):
         smoke_check(legacy_run)
+
+
+def test_pre_chrf_manifest_preserves_scope_but_new_runs_require_chrf(synthetic_run):
+    run = Path(synthetic_run["run_dir"])
+    for path in (run / "scores" / "lexical").glob("*.jsonl"):
+        records = read_jsonl(path)
+        for record in records:
+            record["rows"] = [row for row in record["rows"] if row["reward"] != "chrf_pp"]
+        write_jsonl(path, records)
+    with pytest.raises(ValueError, match="missing"):
+        analyze(synthetic_run)
+    historical = tuple(reward for reward in REWARDS if reward != "chrf_pp")
+    write_json(run / "environment.json", {"rewards": historical})
+    assert analyze(synthetic_run)["rewards"] == historical
+    # Applying the local smoke-only scope must not demand a missing new metric.
+    write_json(run / "config.json", synthetic_run)
+    set_lm_scope(synthetic_run)
+    assert set(analyze(synthetic_run)["rewards"]) == set(PILOT_REWARDS) - {"chrf_pp"}
 
 
 def test_legacy_smoke_without_completed_pair_requires_new_run(legacy_run, monkeypatch):
@@ -574,7 +608,7 @@ def test_partial_lm_requires_explicit_scope_and_is_retained_outside_summary(
     partial = result["scores"].query("reward == 'reference_likelihood'")
     assert len(partial) == 4
     assert not partial.included_in_primary_benchmark.any()
-    assert result["correlations"]["reddit_tldr"].shape == (4, 4)
+    assert result["correlations"]["reddit_tldr"].shape == (len(PILOT_REWARDS),) * 2
     coverage = result["coverage"].query("reward == 'reference_likelihood'")
     assert coverage.complete_pairs.tolist() == [1, 1]
     assert coverage.common_pairs.tolist() == [0, 0]
