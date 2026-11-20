@@ -29,10 +29,11 @@ REWARDS = (
     "reference_likelihood",
     "vr_cli",
     "nover",
+    "llm_judge",
     "length",
 )
 LEGACY_REWARDS = tuple(
-    reward for reward in REWARDS if reward not in ("nover", "chrf_pp", "meteor")
+    reward for reward in REWARDS if reward not in ("nover", "chrf_pp", "meteor", "llm_judge")
 )
 ALL_REWARDS = (*REWARDS, *SMART_REWARDS)
 BACKEND_REWARDS = {
@@ -42,7 +43,7 @@ BACKEND_REWARDS = {
     "bleurt": ("bleurt",),
     "smart1_bertscore": ("smart1_bertscore",),
     "smart1_bleurt": ("smart1_bleurt",),
-    "lm": ("self_certainty", "reference_likelihood", "vr_cli", "nover"),
+    "lm": ("self_certainty", "reference_likelihood", "vr_cli", "nover", "llm_judge"),
 }
 
 

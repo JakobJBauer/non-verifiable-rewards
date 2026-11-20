@@ -15,6 +15,7 @@ from ..rewards import (
     CausalLMScorer,
     ChrFPlusPlusReward,
     LengthReward,
+    LLMJudgeReward,
     MeteorReward,
     NOVERReward,
     RougeLReward,
@@ -318,6 +319,16 @@ class Backend:
                     ),
                     "candidate_tokens": candidate_tokens,
                 }
+            start = time.perf_counter()
+            judge = LLMJudgeReward(self.scorer, task=task_for_dataset(pair["dataset"]))
+            judgments = judge.score_with_details(
+                candidates, references=references, prompts=[pair["prompt"]] * 2
+            )
+            values["llm_judge"] = [item["score"] for item in judgments]
+            details["llm_judge"] = dict(
+                zip(("preferred", "rejected"), judgments, strict=True)
+            )
+            timings["llm_judge_seconds"] = time.perf_counter() - start
         native = self.native_truncation(pair)
         uses_full_text = self.name in ("lexical", "meteor", *SMART_REWARDS)
         rows = []

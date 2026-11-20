@@ -108,6 +108,77 @@ class CausalLMScorer:
             contexts, continuations, statistic="self_certainty", reduction="mean"
         )
 
+    def label_logprobs(
+        self, contexts: Sequence[str], labels: Sequence[str]
+    ) -> list[list[float]]:
+        """Full-vocabulary next-token log probabilities for single-token labels.
+
+        One forward pass per context batch scores every label. No sampling or
+        renormalization over labels happens here; callers can inspect how much
+        probability the model assigns to the allowed output format.
+        """
+        contexts = text_batch(contexts, "contexts")
+        labels = text_batch(labels, "labels")
+        if not labels:
+            raise ValueError("Need at least one label")
+        tokens = [
+            self.tokenizer.encode(label, add_special_tokens=False) for label in labels
+        ]
+        if any(len(ids) != 1 for ids in tokens):
+            raise ValueError("Each label must encode to exactly one token")
+        label_ids = [ids[0] for ids in tokens]
+        if len(set(label_ids)) != len(labels) or set(label_ids) & set(
+            getattr(self.tokenizer, "all_special_ids", [])
+        ):
+            raise ValueError("Labels must encode to distinct, non-special tokens")
+        # Reuse the scoring path's BOS policy and context-plus-target limit.
+        encoded = [
+            self._encode(context, labels[0], i)[0][:-1]
+            for i, context in enumerate(contexts)
+        ]
+        if not encoded:
+            return []
+        import torch
+
+        self.model.eval()
+        device = self.model.get_input_embeddings().weight.device
+        pad_id = self.tokenizer.pad_token_id
+        if pad_id is None:
+            pad_id = self.tokenizer.eos_token_id
+        if pad_id is None:
+            pad_id = 0
+        results = []
+        with torch.inference_mode():
+            for start in range(0, len(encoded), self.batch_size):
+                batch = encoded[start : start + self.batch_size]
+                width = max(map(len, batch))
+                ids = torch.full(
+                    (len(batch), width), pad_id, dtype=torch.long, device=device
+                )
+                mask = torch.zeros_like(ids)
+                for row, tokens in enumerate(batch):
+                    ids[row, : len(tokens)] = torch.tensor(tokens, device=device)
+                    mask[row, : len(tokens)] = 1
+                positions = torch.tensor(
+                    [len(tokens) - 1 for tokens in batch], device=device
+                )
+                kept, indices = positions.unique(sorted=True, return_inverse=True)
+                options = {"logits_to_keep": kept} if self._select_logits else {}
+                logits = self.model(
+                    input_ids=ids, attention_mask=mask, use_cache=False, **options
+                ).logits
+                rows = torch.arange(len(batch), device=logits.device)
+                columns = (indices if self._select_logits else positions).to(
+                    logits.device
+                )
+                logp = logits[rows, columns].float().log_softmax(-1)
+                results.extend(
+                    checked_scores(values, len(labels))
+                    for values in logp[:, label_ids].tolist()
+                )
+                del logits, logp
+        return results
+
     def _encode(
         self, context: str, continuation: str, index: int
     ) -> tuple[list[int], int]:

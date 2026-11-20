@@ -232,6 +232,11 @@ def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
             assert contexts == [chat_context(self.tokenizer, pair["prompt"])] * 2
             return [0.4] * len(candidates)
 
+        def label_logprobs(self, contexts, labels):
+            assert labels == ("0", "1", "2", "3", "4")
+            assert all("impartial evaluator" in context for context in contexts)
+            return [[math.log(0.1)] * 5 for _ in contexts]
+
     engine = Backend.__new__(Backend)
     engine.name, engine.scorer = "lm", Scorer()
     engine.vr_cli = VRCLIReward(engine.scorer)
@@ -272,6 +277,10 @@ def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
     assert [row["score"] for row in nover] == pytest.approx([conditioned[0] / 3, conditioned[1]])
     assert [row["statistics"]["candidate_tokens"] for row in nover] == [100, 1]
     assert all(row["statistics"]["length_log_base"] == 10 for row in nover)
+    judge = [row for row in rows if row["reward"] == "llm_judge"]
+    assert [row["score"] for row in judge] == pytest.approx([0.5, 0.5])
+    assert all(row["statistics"]["judge_task"] == task_for_dataset(dataset) for row in judge)
+    assert all(row["statistics"]["rating_token_mass"] == pytest.approx(0.5) for row in judge)
     assert len(engine.scorer.calls) == 5  # Two baselines, three shared batches.
     assert [row["statistics"]["conditioned_logp_mean"] for row in vr] == list(
         conditioned
@@ -376,7 +385,7 @@ def legacy_run(synthetic_run):
         records = read_jsonl(path)
         for record in records:
             record["rows"] = [
-                row for row in record["rows"] if row["reward"] not in ("nover", "chrf_pp", "meteor")
+                row for row in record["rows"] if row["reward"] in LEGACY_REWARDS
             ]
             for row in record["rows"]:
                 if row["reward"] == "reference_likelihood":
@@ -414,7 +423,7 @@ def test_legacy_reporting_and_smoke_remain_readable_but_new_runs_require_nover(l
         smoke_check(legacy_run)
 
 
-@pytest.mark.parametrize("new_reward,backend", [("chrf_pp", "lexical"), ("meteor", "meteor")])
+@pytest.mark.parametrize("new_reward,backend", [("chrf_pp", "lexical"), ("meteor", "meteor"), ("llm_judge", "lm")])
 def test_historical_manifest_preserves_scope_but_new_runs_require_new_reward(
     synthetic_run, new_reward, backend
 ):
@@ -684,7 +693,7 @@ def test_fresh_smoke_scores_only_one_pair_and_keeps_it_separate(
     )
     saved = smoke_check(synthetic_run)
     assert evaluated == [templates[0]["pair_id"]]
-    assert len(saved["validation"]["rows"]) == 8
+    assert len(saved["validation"]["rows"]) == 2 * len(BACKEND_REWARDS["lm"])
     assert saved["scored_input"]["pair_id"] == saved["input"]["pair_id"]
     assert smoke_check(synthetic_run) == saved
     assert len(evaluated) == 1

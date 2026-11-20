@@ -75,6 +75,7 @@ returns source provenance and split counts.
 | Reference likelihood, VR-CLI, NOVER proxy | Reasoning before the final answer line, against correct option text | Whether a scoring model finds the known answer more likely given the candidate rationale |
 | ROUGE-L, chrF++, METEOR, BERTScore, BLEURT, SMART | Text of the selected option, against correct option text | Answer agreement/similarity; not an assessment of the rationale |
 | Self-certainty | Complete generated response under its generation prompt | Model certainty, which can be high on incorrect reasoning |
+| LLM judge | Complete generated response, with question and correct option text | Rubric-based assessment of answer correctness and any supplied reasoning; a model judgment, not verification |
 | Length | Complete response or rationale, declared explicitly | A length control, not correctness |
 
 For likelihood rewards, select `task="multiple_choice"`. The context asks for

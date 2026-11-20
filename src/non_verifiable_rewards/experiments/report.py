@@ -31,6 +31,7 @@ LABELS = {
     "reference_likelihood": "Reference likelihood",
     "vr_cli": "VR-CLI",
     "nover": "NOVER proxy",
+    "llm_judge": "LLM judge",
     "length": "Length baseline",
 }
 DATASET_LABELS = {"reddit_tldr": "Reddit TL;DR", "litbench": "LitBench", "wmt14_de_en": "WMT14 German → English"}
@@ -39,7 +40,7 @@ COLORS = dict(
         REWARDS,
         (
             "#4477AA", "#66CCEE", "#DDCC77", "#228833", "#AA3377", "#AA8800",
-            "#EE7733", "#0099BB", "#8855AA", "#777777",
+            "#EE7733", "#0099BB", "#8855AA", "#332288", "#777777",
         ),
         strict=True,
     )
@@ -358,7 +359,7 @@ def smoke_figure(config):
     rows = smoke["validation"]["rows"]
     rewards = [
         reward
-        for reward in ("reference_likelihood", "self_certainty", "vr_cli", "nover")
+        for reward in ("reference_likelihood", "self_certainty", "vr_cli", "nover", "llm_judge")
         if any(row["reward"] == reward for row in rows)
     ]
     fig, axes = plt.subplots(1, len(rewards), figsize=(4.3 * len(rewards), 4.8))

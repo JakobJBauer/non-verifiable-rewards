@@ -168,7 +168,7 @@ vote ties are broken by content hash. These decisions are recorded in each pair.
 | `scores/*/*.invocation-*.json`, `logs/` | Every worker invocation, package versions, peak memory, progress, and failures |
 | `source_at_*.tar.gz`, `artifacts.json` | Source snapshots and output checksums |
 
-All ten default scores are higher-is-better; the two SMART variants are optional.
+All eleven default scores are higher-is-better; the two SMART variants are optional.
 Accuracy assigns 1 to a correct preference,
 0 to an incorrect preference, and 0.5 to a tie. The report uses the common complete
 pair set for methods included in the benchmark, reports coverage and ties, and obtains paired 95% percentile intervals
@@ -247,7 +247,7 @@ Choose the appropriate PyTorch build for your CPU/CUDA environment.
 
 Importing reward modules does not load PyTorch, TensorFlow, Transformers, or any
 model weights. BERTScore and BLEURT load on their first nonempty scoring call.
-The causal LM is loaded explicitly and can be shared by all four LM rewards.
+The causal LM is loaded explicitly and can be shared by all five LM rewards.
 METEOR loads English WordNet lazily; the experiment `download` step prepares
 its pinned corpus for offline scoring. Standalone usage is shown below.
 
@@ -283,6 +283,7 @@ lengths, and empty references raise errors.
 | `ReferenceLikelihoodReward` / `reference_likelihood.py` | log p(reference \| prompt, candidate) | prompts, references |
 | `VRCLIReward` / `vr_cli.py` | Continuous percent improvement in reference perplexity | prompts, references |
 | `NOVERReward` / `nover.py` | NOVER proxy: mean reference log probability / (1 + log10(candidate tokens)) | prompts, references |
+| `LLMJudgeReward` / `llm_judge.py` | Expected task-specific 0–4 quality rating, scaled to 0–1 | prompts, references |
 | `LengthReward` / `length.py` | Word count; optionally character count | none |
 
 For example, score both sides of a comparison against the **same independently
@@ -349,9 +350,21 @@ pairs; raw likelihoods also vary with reference length and prompt difficulty.
 
 ## A shared language model
 
+The LM worker now also includes an **LLM judge** using the same configured
+Qwen3-4B checkpoint. It independently rates each candidate using a task-specific
+rubric and the reference, without seeing preference labels or the other
+candidate. The score is the probability-weighted 0–4 rating divided by four;
+Qwen thinking is disabled and no free-form critique is generated. Rating
+probabilities and format probability mass are saved with each score. See the
+[judge guide](docs/llm_judge.md) for the rubric, interpretation and GRPO usage.
+[`configs/eidf_judge_qwen3_4b.toml`](configs/eidf_judge_qwen3_4b.toml) selects a
+fresh three-task run directory. Historical reports retain their recorded scope;
+adding judge scores requires new inference and a new run directory.
+
 ```python
 from non_verifiable_rewards.rewards import (
-    CausalLMScorer, NOVERReward, ReferenceLikelihoodReward, SelfCertaintyReward, VRCLIReward,
+    CausalLMScorer, LLMJudgeReward, NOVERReward, ReferenceLikelihoodReward,
+    SelfCertaintyReward, VRCLIReward,
 )
 from non_verifiable_rewards.rewards.prompts import chat_context, make_reference_context
 
@@ -374,11 +387,13 @@ vr_cli = VRCLIReward(lm, context_builder=reference_context)
 certainty = SelfCertaintyReward(
     lm, context_builder=lambda prompt: chat_context(lm.tokenizer, prompt)
 )
+judge = LLMJudgeReward(lm, task="summarization")
 
 likelihood_scores = likelihood.score(**batch)
 nover_scores = nover.score(**batch)
 vr_cli_scores = vr_cli.score(**batch)
 certainty_scores = certainty.score(**batch)
+judge_scores = judge.score(**batch)
 ```
 
 The runner computes reference likelihood once under the shared task prompt and
