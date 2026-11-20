@@ -46,7 +46,10 @@ validation splits, local overrides, and compatibility with historical runs.
 holdout. Its references are correct option texts, not reasoning traces or
 human-preference pairs. See the [SuperGPQA guide](docs/supergpqa.md) for reward
 interpretation, GRPO callback/mixture examples and the generated-answer benchmark.
-The repository supplies these interfaces; it does not yet include a GRPO trainer.
+The [GRPO training pipeline](docs/grpo_training.md) trains and persists Qwen3-4B
+policies with configurable reward mixtures, then benchmarks each saved policy.
+The default [sweep config](configs/grpo_qwen3_4b.toml) defines thirteen independent
+runs, one per reward, with a balanced TL;DR/LitBench/WMT14 training sample.
 
 `configs/eidf_qwen3_4b_three_tasks.toml` enables all three datasets and all reward
 backends, including SMART, in a new output directory. A config can instead set

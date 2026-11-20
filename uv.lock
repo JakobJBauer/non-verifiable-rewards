@@ -1655,6 +1655,13 @@ lm = [
     { name = "torch" },
     { name = "transformers" },
 ]
+training = [
+    { name = "accelerate" },
+    { name = "peft" },
+    { name = "torch" },
+    { name = "transformers" },
+    { name = "trl" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1665,6 +1672,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'lm'", specifier = ">=1.6" },
+    { name = "accelerate", marker = "extra == 'training'", specifier = ">=1.11" },
     { name = "bert-score", marker = "extra == 'bertscore'", specifier = ">=0.3.13,<0.4" },
     { name = "bleurt", marker = "extra == 'bleurt'", git = "https://github.com/google-research/bleurt.git?rev=cebe7e6f996b40910cfaa520a63db47807e3bf5c" },
     { name = "datasets", specifier = ">=5.2.0" },
@@ -1672,14 +1680,18 @@ requires-dist = [
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.9" },
     { name = "nltk", specifier = ">=3.9,<4" },
     { name = "pandas", marker = "extra == 'benchmark'", specifier = ">=2.2" },
+    { name = "peft", marker = "extra == 'training'", specifier = "==0.22.0" },
     { name = "rouge-score", specifier = ">=0.1.2" },
     { name = "sacrebleu", specifier = ">=2.5,<3" },
     { name = "scipy", marker = "extra == 'benchmark'", specifier = ">=1.14" },
     { name = "torch", marker = "extra == 'lm'", specifier = ">=2.6" },
+    { name = "torch", marker = "extra == 'training'", specifier = ">=2.6" },
     { name = "transformers", marker = "extra == 'bertscore'", specifier = ">=5,<6" },
     { name = "transformers", marker = "extra == 'lm'", specifier = ">=5,<6" },
+    { name = "transformers", marker = "extra == 'training'", specifier = ">=5,<6" },
+    { name = "trl", marker = "extra == 'training'", specifier = "==1.18.2" },
 ]
-provides-extras = ["benchmark", "bertscore", "lm", "bleurt"]
+provides-extras = ["benchmark", "bertscore", "lm", "training", "bleurt"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2099,6 +2111,27 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/30/4b/90c937815137d43ce71ba043cd3566221e9df6b9c805f24b5d138c9d40a7/parso-0.8.7.tar.gz", hash = "sha256:eaaac4c9fdd5e9e8852dc778d2d7405897ec510f2a298071453e5e3a07914bb1", size = 401824, upload-time = "2026-05-01T23:13:02.138Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/99/5d/8268b644392ee874ee82a635cd0df1773de230bde356c38de28e298392cc/parso-0.8.7-py2.py3-none-any.whl", hash = "sha256:a8926eb2a1b915486941fdbd31e86a4baf88fe8c210f25f2f35ecec5b574ca1c", size = 107025, upload-time = "2026-05-01T23:12:58.867Z" },
+]
+
+[[package]]
+name = "peft"
+version = "0.22.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "psutil" },
+    { name = "pyyaml" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/14/47/277ac750804eb771f8b7d3126870c01bb1270121b63e5b0a12e6e19b8fe4/peft-0.22.0.tar.gz", hash = "sha256:e7fca396b98e6c1b0b02538e45efd84875c4d0d074c29c837e372cd7c845647a", size = 1108661, upload-time = "2026-11-19T14:55:41.595Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/f2/107e752b64f5636ff92aed4010bad2448d9dd15d9fcf6c1c01b1075dfd76/peft-0.22.0-py3-none-any.whl", hash = "sha256:397f09710e3e1b6ad730211468839aa271732b51a50e99d4f44f2a6e8d9a9f0b", size = 886740, upload-time = "2026-11-19T14:55:39.08Z" },
 ]
 
 [[package]]
@@ -3214,6 +3247,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/26/f5/cdcfdc92a47b3df01759a5172f1fa505aad2b23625ba689fa5883d3ac36e/triton-3.9.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:eab30be40d412e947f3b74b20f50e4f8e07dd11439e7ddc6bd6184cabda2be79", size = 285881516, upload-time = "2026-10-27T18:28:23.251Z" },
     { url = "https://files.pythonhosted.org/packages/63/78/b0e44de35533e5b179ab75a70aad01b5ae012b15ec566064a29c818813e0/triton-3.9.0-cp315-cp315t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:990d43d967bbcc90f973fc17ad9cd7352e67940f41b31d94afd53b9867a3c1a1", size = 263467108, upload-time = "2026-10-27T18:39:28.236Z" },
     { url = "https://files.pythonhosted.org/packages/b7/bb/931550491793a10fef98a305701a1459129edaaf9146820c529509cdcf74/triton-3.9.0-cp315-cp315t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:bac2ed42a2b7aa232aeec57c2f7b0d88b61a74a29b3bf358f4cec6b20be356f6", size = 285878775, upload-time = "2026-10-27T18:28:33.737Z" },
+]
+
+[[package]]
+name = "trl"
+version = "1.18.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "datasets" },
+    { name = "huggingface-hub" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "psutil" },
+    { name = "pyarrow" },
+    { name = "pyyaml" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ab/ac/dd1ec4bdf301c2c82ccb46b953d49b00091f3d6d28d4557254c625c89cda/trl-1.18.2.tar.gz", hash = "sha256:7665562227a8204522e0e0b5235608da1a5f46c298a9c386dcf0799802b2ae31", size = 842640, upload-time = "2026-11-19T17:03:29.104Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/dc/490526ddc2ec222d5ce5c329ea16ce9ebf819deaa822a64ddc6c92844264/trl-1.18.2-py3-none-any.whl", hash = "sha256:e498fc73d29e718347d5f34b5675c8660780b684fe449036c110010413d90139", size = 1075047, upload-time = "2026-11-19T17:03:27.207Z" },
 ]
 
 [[package]]

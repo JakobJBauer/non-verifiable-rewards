@@ -120,7 +120,8 @@ answer checks. Keep the exact-answer baseline and held-out accuracy evaluation.
 Freeze judge weights when comparing policy-training rewards; using the same
 checkpoint family may introduce correlated errors and self-preference. A 4B
 judge's agreement with human choices is an empirical result to measure, not an
-assumption. This implementation does not add a GRPO training launcher.
+assumption. The [GRPO training launcher](grpo_training.md) now supports this
+reward alone or in weighted mixtures, with a separate frozen judge model.
 
 ## Validation
 

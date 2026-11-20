@@ -30,6 +30,13 @@ lm = [
     "transformers>=5,<6",
     "accelerate>=1.6",
 ]
+training = [
+    "torch>=2.6",
+    "transformers>=5,<6",
+    "accelerate>=1.11",
+    "trl==1.18.2",
+    "peft==0.22.0",
+]
 bleurt = [
     "bleurt @ git+https://github.com/google-research/bleurt.git@cebe7e6f996b40910cfaa520a63db47807e3bf5c",
 ]

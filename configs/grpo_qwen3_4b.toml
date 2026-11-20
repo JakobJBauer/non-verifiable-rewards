@@ -1,0 +1,79 @@
+# python -m non_verifiable_rewards.training plan --config configs/grpo_qwen3_4b.toml
+# Paths are relative to the working directory. On EIDF use the companion config.
+output_dir = "outputs/grpo_qwen3_4b"
+cache_dir = "artifacts/cache"
+seed = 1729
+
+[policy]
+id = "Qwen/Qwen3-4B"
+revision = "1cfa9a7208912126459214e8b04321603b3df60c"
+device = "cuda"
+dtype = "bfloat16"
+lora = true
+enable_thinking = false
+
+[data]
+datasets = ["reddit_tldr", "litbench", "wmt14_de_en"]
+train_examples_per_dataset = 4096
+max_prompt_tokens = 4096
+
+[optimization]
+max_steps = 500
+per_device_train_batch_size = 2
+gradient_accumulation_steps = 4
+num_generations = 4
+max_completion_length = 1024
+learning_rate = 0.00001
+beta = 0.04
+save_steps = 100
+
+[benchmark]
+enabled = true
+include_base_model = true
+pairs_per_dataset = 2000
+generation_prompts_per_dataset = 200
+smart_bleurt_prompts = 100
+max_new_tokens = 1024
+bootstrap_samples = 10000
+
+# Each run starts from the same base checkpoint. Mixtures use a weighted sum
+# before GRPO group normalization, e.g. rewards = {llm_judge = 1.0, chrf_pp = 0.01}.
+[[runs]]
+name = "rouge_l"
+rewards = {rouge_l = 1.0}
+[[runs]]
+name = "chrf_pp"
+rewards = {chrf_pp = 1.0}
+[[runs]]
+name = "meteor"
+rewards = {meteor = 1.0}
+[[runs]]
+name = "bertscore"
+rewards = {bertscore = 1.0}
+[[runs]]
+name = "bleurt"
+rewards = {bleurt = 1.0}
+[[runs]]
+name = "self_certainty"
+rewards = {self_certainty = 1.0}
+[[runs]]
+name = "reference_likelihood"
+rewards = {reference_likelihood = 1.0}
+[[runs]]
+name = "vr_cli"
+rewards = {vr_cli = 1.0}
+[[runs]]
+name = "nover"
+rewards = {nover = 1.0}
+[[runs]]
+name = "llm_judge"
+rewards = {llm_judge = 1.0}
+[[runs]]
+name = "length"
+rewards = {length = 1.0}
+[[runs]]
+name = "smart1_bertscore"
+rewards = {smart1_bertscore = 1.0}
+[[runs]]
+name = "smart1_bleurt"
+rewards = {smart1_bleurt = 1.0}

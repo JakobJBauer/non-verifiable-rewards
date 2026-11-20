@@ -143,8 +143,9 @@ are supported. Structured `thinking`, `reasoning_content`, or tool-call fields
 must be converted to the original decoded completion text; silently dropping
 those fields would change what is scored.
 
-The current repository supplies **data, callbacks and evaluation**, not an
-end-to-end GRPO training launcher. No GPU training is run by these commands.
+The [GRPO training launcher](grpo_training.md) connects these data and rewards
+to configurable training runs, saved models and held-out generated-answer
+benchmarks. The standalone data/evaluation commands above do not start training.
 GPU training/generation belongs on `eidf-dev` per [the execution guide](eidf_execution.md).
 
 For the actual training experiment:
