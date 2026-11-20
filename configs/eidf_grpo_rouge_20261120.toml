@@ -1,0 +1,48 @@
+# Initial ROUGE-only GRPO experiment; benchmark both policies after training.
+output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_rouge_20261120"
+cache_dir = "/root/.cache/non-verifiable-rewards"
+seed = 1729
+
+[policy]
+id = "Qwen/Qwen3-4B"
+revision = "1cfa9a7208912126459214e8b04321603b3df60c"
+device = "cuda"
+dtype = "bfloat16"
+lora = true
+enable_thinking = false
+
+[data]
+datasets = ["reddit_tldr", "litbench", "wmt14_de_en"]
+train_examples_per_dataset = 4096
+max_prompt_tokens = 4096
+
+[optimization]
+max_steps = 500
+per_device_train_batch_size = 2
+gradient_accumulation_steps = 4
+num_generations = 4
+max_completion_length = 1024
+learning_rate = 0.00001
+beta = 0.04
+save_steps = 100
+
+[reward_models]
+python = "/root/nvr-training-venv/bin/python"
+bleurt_python = "/root/nvr-bleurt-venv/bin/python"
+device = "cuda"
+dtype = "bfloat16"
+batch_size = 32
+bleurt_tf32 = false
+
+[benchmark]
+enabled = true
+include_base_model = true
+pairs_per_dataset = 2000
+generation_prompts_per_dataset = 200
+smart_bleurt_prompts = 100
+max_new_tokens = 1024
+bootstrap_samples = 10000
+
+[[runs]]
+name = "rouge_l"
+rewards = {rouge_l = 1.0}

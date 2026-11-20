@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "datasets>=5.2.0",
+    "fsspec[http]>=2023.1.0",
     "rouge-score>=0.1.2",
     "sacrebleu>=2.5,<3",
     "nltk>=3.9,<4",
