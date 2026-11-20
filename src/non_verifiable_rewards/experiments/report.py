@@ -582,6 +582,13 @@ def write_reports(result, config):
         "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. LM scores use a fixed checkpoint; this run does not train a policy.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
     ]
+    scope_path = run / "evaluation_scope.json"
+    scope_reason = (
+        json.loads(scope_path.read_text()).get("reason")
+        if scope_path.exists() else None
+    )
+    if scope_reason:
+        notes.insert(0, scope_reason)
     manifest_path = run / "data_manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text())
@@ -712,29 +719,24 @@ def write_reports(result, config):
                 f"{DATASET_LABELS[name]}: {result['vr_cli_variant'].replace('_', ' ').capitalize()} VR-CLI ties on {vr.tie_rate:.1%} of pairs."
             )
     if "reference_likelihood" not in result["rewards"]:
-        scope_path = run / "evaluation_scope.json"
-        scope_reason = (
-            json.loads(scope_path.read_text()).get("reason")
-            if scope_path.exists() else None
-        )
-        notes.insert(
+        if not scope_reason:
+            notes.insert(
             1,
-            scope_reason or (
             "Qwen is excluded from the primary benchmark because local LM evaluation was limited. "
             + (
                 "One successful pair is displayed as an execution smoke check. "
                 if (run / "qwen_smoke_check.json").exists()
                 else "No successful LM smoke check was recorded. "
             )
-            + "Any partial LM outputs are retained but excluded from accuracy, correlations, and cost comparisons. See evaluation_scope.json for the saved scope."),
-        )
+            + "Any partial LM outputs are retained but excluded from accuracy, correlations, and cost comparisons. See evaluation_scope.json for the saved scope.",
+            )
     if (run / "subset_selection.json").exists():
         notes.insert(
             0,
-            "Runtime-limited comparison: all thirteen rewards use the same fixed "
-            "100 pairs per dataset, taken from the original shuffled test samples. "
-            "Full 2,000-pair BERTScore and inexpensive-baseline results are retained "
-            "separately. The smaller comparison has wider uncertainty; do not treat "
+            "Matched SMART-BLEURT comparison: all thirteen rewards are compared on "
+            "the same fixed 100 pairs per dataset, taken from the original shuffled "
+            "test samples. Every other metric also has a separate full 2,000-pair "
+            "estimate in the main report. This smaller comparison has wider uncertainty; do not treat "
             "small differences in point estimates as established rankings."
         )
     figures = [
@@ -760,6 +762,30 @@ def write_reports(result, config):
         + "\n\n"
         + "\n".join("- " + finding for finding in findings)
     )
+    companion_html = ""
+    companion = run / "smart_bleurt_subset"
+    if (companion / "tables" / "summary.parquet").exists():
+        import pandas as pd
+
+        matched = display_summary(pd.read_parquet(companion / "tables" / "summary.parquet"))
+        explanation = (
+            "Only SMART-BLEURT is limited to 100 pairs per dataset. The twelve "
+            "other metrics retain their 2,000-pair estimates above. This additional "
+            "table compares every metric on exactly the same 100 pairs as SMART-BLEURT; "
+            "use it for paired comparisons involving that metric, rather than "
+            "comparing estimates from different sample sizes."
+        )
+        markdown += (
+            "\n\n## SMART-BLEURT: matched 100-pair comparison\n\n" + explanation
+            + "\n\n" + markdown_table(matched)
+            + "\n\n[Full matched comparison](smart_bleurt_subset/report.html)\n"
+        )
+        companion_html = (
+            '<section id="smart-bleurt"><h2>SMART-BLEURT: matched 100-pair comparison</h2>'
+            + '<p>' + html.escape(explanation) + '</p><div class="scroll">'
+            + matched.to_html(index=False, border=0, escape=True)
+            + '</div><p><a href="smart_bleurt_subset/report.html">Full matched comparison, figures and diagnostics</a></p></section>'
+        )
     for stem, title in figures:
         markdown += f"\n\n## {title}\n\n![{title}](figures/{stem}.png)\n\n[PDF](figures/{stem}.pdf)\n"
     markdown += "\n## Saved outputs\n\nFull original pairs: `data/`. Exact neural inputs: `scored_text/`. Resumable pair journals: `scores/`. Flat scores, margins, confidence intervals, bootstrap replicates, coverage and timing tables: `tables/` (CSV and Parquet). Config, resolved model revisions, source hashes, environment and logs are retained.\n"
@@ -803,7 +829,7 @@ def write_reports(result, config):
         + "</ul></section>"
     )
     document += (
-        "".join(figure_html)
+        companion_html + "".join(figure_html)
         + "<h2>Disagreement examples</h2><p>Deterministically selected cases with split reward decisions; full texts are shown below.</p>"
         + "".join(example_html)
         + "</main></html>"
