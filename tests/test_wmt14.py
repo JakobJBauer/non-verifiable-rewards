@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 from datasets import Dataset, DatasetDict
 
-from non_verifiable_rewards.data import load_wmt14, load_wmt14_preferences
+from non_verifiable_rewards.data import (
+    load_wmt14,
+    load_wmt14_parallel,
+    load_wmt14_preferences,
+)
 from non_verifiable_rewards.data.pairs import make_pair
 from non_verifiable_rewards.data.wmt14 import (
     JUDGMENTS_URL,
@@ -204,7 +208,7 @@ def test_parallel_training_has_references_but_no_preferences(monkeypatch, stream
         return data.to_iterable_dataset() if streaming else data
 
     monkeypatch.setattr("non_verifiable_rewards.data.wmt14.load_dataset", load)
-    rows = list(load_wmt14(streaming=streaming, revision="pinned"))
+    rows = list(load_wmt14_parallel(streaming=streaming, revision="pinned"))
     assert len(rows) == 2
     assert [r["metadata"]["source_row"] for r in rows] == [0, 3]
     assert rows[0]["reference"] == "A dog."
@@ -217,6 +221,52 @@ def test_parallel_training_has_references_but_no_preferences(monkeypatch, stream
         "Ein Hund.", "Candidate", task="translation_de_en"
     )
     assert "A dog." not in conditioned
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+def test_task_train_excludes_validation_and_official_test_sources(
+    monkeypatch, wmt_sources, streaming
+):
+    submissions, _, *_ = wmt_sources
+
+    def load(path, name, **kwargs):
+        assert (path, name) == ("wmt/wmt14", "de-en")
+        assert kwargs["revision"] == "pinned"
+        rows = [
+            {"translation": {"de": " Ein Hund. ", "en": "Official test overlap"}},
+            {"translation": {"de": "Ein Vogel.", "en": "Validation source"}},
+        ]
+        if kwargs["split"] == "train":
+            rows.append({"translation": {"de": "Eine Maus.", "en": "A mouse."}})
+        data = Dataset.from_list(rows)
+        return data.to_iterable_dataset() if kwargs["streaming"] else data
+
+    monkeypatch.setattr("non_verifiable_rewards.data.wmt14.load_dataset", load)
+    data, metadata = load_wmt14(
+        streaming=streaming,
+        revision="pinned",
+        submissions_archive=submissions,
+        return_metadata=True,
+    )
+    rows = list(data)
+    assert len(rows) == 1
+    assert rows[0]["prompt"] == translation_prompt("Eine Maus.")
+    assert rows[0]["metadata"]["source_row"] == 2
+    assert "preferred" not in rows[0]
+    assert metadata["train"]["audit"]["excluded_heldout_source_overlap"] == (
+        None if streaming else 2
+    )
+    validation = list(
+        load_wmt14(
+            split="validation",
+            streaming=streaming,
+            revision="pinned",
+            submissions_archive=submissions,
+        )
+    )
+    assert len(validation) == 1
+    assert validation[0]["prompt"] == translation_prompt("Ein Vogel.")
+    assert validation[0]["metadata"]["source_row"] == 1
 
 
 def test_dataset_scope_preserves_historical_runs_and_rejects_invalid_values(tmp_path):
@@ -232,6 +282,38 @@ def test_dataset_scope_preserves_historical_runs_and_rejects_invalid_values(tmp_
     for value in ([], "wmt14_de_en", ["unknown"], ["litbench", "litbench"]):
         with pytest.raises(ValueError, match="distinct known"):
             configured_datasets({"datasets": value})
+
+
+def test_public_test_split_is_ranked_pairs(wmt_sources):
+    submissions, judgments, *_ = wmt_sources
+    data, metadata = load_wmt14(
+        split="test",
+        submissions_archive=submissions,
+        judgments_archive=judgments,
+        return_metadata=True,
+    )
+    assert len(data) > 0
+    assert {"preferred", "rejected", "reference"} <= set(data.column_names)
+    assert set(metadata) == {"test"}
+    assert "ranked_test" in metadata["test"]["split_policy"]
+    for kwargs in ({"streaming": True}, {"revision": "main"}):
+        with pytest.raises(ValueError, match="does not support"):
+            load_wmt14(split="test", **kwargs)
+    with pytest.raises(ValueError, match="only to annotated test"):
+        load_wmt14(split="train", judgments_archive=judgments)
+    with pytest.raises(ValueError, match="split must"):
+        load_wmt14(split="invalid")
+
+
+def test_unannotated_wmt_test_remains_explicitly_available(monkeypatch):
+    def load(path, name, **kwargs):
+        assert kwargs["split"] == "test"
+        return Dataset.from_list([{"translation": {"de": "Hund", "en": "Dog"}}])
+
+    monkeypatch.setattr("non_verifiable_rewards.data.wmt14.load_dataset", load)
+    data = load_wmt14_parallel(split="test")
+    assert data[0]["reference"] == "Dog"
+    assert "preferred" not in data.column_names
 
 
 @pytest.mark.parametrize("datasets", [None, ["wmt14_de_en"], list(DATASETS)])
@@ -269,6 +351,7 @@ def test_prepare_score_and_report_selected_datasets(
     def other_loader(name, split):
         def load(**kwargs):
             assert name in names
+            assert kwargs["split"] == split
             pairs = [
                 make_pair(
                     name,
@@ -283,18 +366,22 @@ def test_prepare_score_and_report_selected_datasets(
                 for i in range(2)
             ]
             return Dataset.from_list(pairs), {
-                split: {"audit": {"eligible_pairs": 2}, "sources": {}}
+                split: {
+                    "audit": {"eligible_pairs": 2},
+                    "sources": {},
+                    "split_policy": "fixture",
+                }
             }
 
         return load
 
     monkeypatch.setattr(
         "non_verifiable_rewards.experiments.data.load_sff",
-        other_loader("reddit_tldr", "validation"),
+        other_loader("reddit_tldr", "test"),
     )
     monkeypatch.setattr(
         "non_verifiable_rewards.experiments.data.load_litbench",
-        other_loader("litbench", "train"),
+        other_loader("litbench", "test"),
     )
     submissions, judgments, *_ = wmt_sources
     prepare(config, wmt14_submissions=submissions, wmt14_judgments=judgments)

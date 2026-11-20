@@ -32,12 +32,18 @@ def make_pair(
     }
 
 
-def reddit_pairs(rows, references):
+def reddit_pairs(rows, references, *, source_split=None, excluded_posts=()):
     audit = Counter()
     pairs = {}
     for index, row in enumerate(rows):
         audit["source_rows"] += 1
         info = row["info"]
+        if source_split is not None and row.get("split") != source_split:
+            audit["excluded_other_split"] += 1
+            continue
+        if _text(info.get("post")) in excluded_posts:
+            audit["excluded_test_post_overlap"] += 1
+            continue
         if _text(info.get("site")).lower() in _NEWS_SITES or not _text(
             info.get("post")
         ):
@@ -64,7 +70,7 @@ def reddit_pairs(rows, references):
                 gold["summary"],
                 info["id"] + ":human_tldr",
                 {
-                    "source_row": index,
+                    "source_row": row.get("_source_row", index),
                     "split": row.get("split"),
                     "batch": row.get("batch"),
                     "confidence": (row.get("extra") or {}).get("confidence"),
@@ -137,7 +143,7 @@ def litbench_pairs(rows):
                 reference,
                 digest([prompt_id, reference])[:24],
                 {
-                    "source_row": index,
+                    "source_row": row.get("_source_row", index),
                     "preferred_upvotes": int(row["chosen_upvotes"]),
                     "rejected_upvotes": int(row["rejected_upvotes"]),
                     "reference_upvotes": max(group[reference]),

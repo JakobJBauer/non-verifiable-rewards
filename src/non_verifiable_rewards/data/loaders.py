@@ -28,7 +28,7 @@ _PAIR_COLUMNS = (
 )
 
 
-def load_sff(
+def load_sff_preferences(
     *,
     split=None,
     cache_dir=None,
@@ -36,7 +36,11 @@ def load_sff(
     tldr_references=None,
     return_metadata=False,
 ):
-    """Load Reddit SFF comparisons, joining the original human TL;DR by post ID.
+    """Load native SFF comparison splits, joining human TL;DRs by post ID.
+
+    This low-level API preserves the original train/validation comparison
+    corpus for reproducing earlier work. Use ``load_sff`` for RL train prompts
+    and separate valid1 validation / valid2 test pairs.
 
     Returns a DatasetDict with train/validation, or a Dataset when ``split`` is
     supplied. References are downloaded and cached by Hugging Face datasets;
@@ -100,14 +104,17 @@ def load_sff(
     return (data, metadata) if return_metadata else data
 
 
-def load_litbench(
+def load_litbench_preferences(
     *,
     split=None,
     cache_dir=None,
     litbench_arrow=None,
     return_metadata=False,
 ):
-    """Load LitBench pairs with a third story as each pair's reference.
+    """Load all LitBench-Train pairs with third-story references, without splitting.
+
+    This low-level API reproduces the historical comparison corpus. Use
+    ``load_litbench`` for the prompt-disjoint RL train / preference test split.
 
     The reference is the highest-upvote distinct story for the same prompt
     outside the pair (maximum observed votes, content hash to break ties).

@@ -1,149 +1,180 @@
-# Data for reward comparisons and RL
+# Dataset loading for training and evaluation
 
-`load_sff()` and `load_litbench()` return Hugging Face `DatasetDict` objects.
-Pass `split="train"` (or `split="validation"` for SFF) to load a single `Dataset`.
-Every row contains `prompt`, `preferred`, `rejected`, and `reference`, along
-with dataset/prompt/pair/text IDs and reference-selection metadata. The data
-package owns loading, reference construction, validation, and deduplication.
-The experiment `prepare` stage calls these loaders and saves a reproducible
-sample; its JSONL files are outputs, not prerequisites for using the loaders.
-
-```python
-from non_verifiable_rewards.data import load_litbench, load_sff
-
-sff = load_sff()  # train and validation, each with its own human references
-stories = load_litbench(split="train")
-batch = stories[:8]
-scores = reward.score(
-    batch["preferred"], references=batch["reference"], prompts=batch["prompt"]
-)
-```
-
-SFF references are the original human TL;DRs from OpenAI's public
-`tldr_3_filtered/train.jsonl` and `valid.jsonl`, downloaded and cached by
-Hugging Face datasets. The loader joins by post ID and checks the source post.
-It excludes news examples, missing/mismatched references, invalid comparisons,
-empty texts, pairs containing the reference, and duplicate labeled pairs.
-Unlike the old three-column loader, it returns the Reddit reference-eligible
-cohort used by the reward benchmark, rather than all SFF comparisons.
-
-LitBench has no supplied gold story. The loader groups stories by stripped
-prompt and picks the highest maximum-observed-upvote story **outside each
-pair**, breaking ties by content hash. It requires at least three distinct
-nonempty stories and a strict upvote preference. The reference belongs to the
-same prompt and differs from both candidates, but can be less popular than
-either. Different pairs can use different references. This preserves the
-existing benchmark's rule; it does not make matching that story a validated
-measure of creative-writing quality.
-
-## Training and evaluating generated responses
-
-Pairwise labels support offline reward diagnostics. In RL, the policy generates
-a new candidate from the prompt, and the reward receives that candidate plus
-any required reference. The stored preferred/rejected texts are not rollouts.
-Keep the reference out of the policy input.
-
-Split by prompt before training. A random split of pairs can put the same
-prompt, stories, and references on both sides. `split_by_prompt` assigns whole
-groups of identical stripped prompts within each task to train/test, using a
-seed and a row-order-independent shuffle. `test_size` is a fraction of unique
-prompts. Since reference construction only pools stories for the same prompt,
-all texts used to choose a reference stay with that prompt's partition.
+All three task loaders expose `split="train"` for policy training with a
+`prompt` and `reference`, and `split="test"` for offline reward evaluation with
+`prompt`, `preferred`, `rejected`, and a separate `reference`. References are
+loaded or constructed in the data package; no prepared experiment JSON is
+required. Only the prompt goes to the generating policy. The reference is
+reward-side data, never part of the policy input.
 
 ```python
-from datasets import DatasetDict
-from non_verifiable_rewards.data import split_by_prompt, to_prompt_dataset
+from non_verifiable_rewards.data import load_sff, load_litbench, load_wmt14
 
-outer = split_by_prompt(stories, test_size=0.2, seed=1729)
-inner = split_by_prompt(outer["train"], test_size=0.125, seed=1730)
-pairs = DatasetDict(
-    train=inner["train"], validation=inner["test"], test=outer["test"]
-)
-rollout_data = to_prompt_dataset(pairs)
-# Approximately 70% train / 10% validation / 20% test, measured in prompts.
-
-batch = rollout_data["train"][:8]
-# candidates = policy.generate(batch["prompt"])
-# scores = reward.score(
-#     candidates, prompts=batch["prompt"], references=batch["reference"]
-# )
+reddit_train = load_sff(split="train")
+reddit_test = load_sff(split="test")
+story_train = load_litbench(split="train")
+story_test = load_litbench(split="test")
+translation_train = load_wmt14(split="train", streaming=True)
+translation_test = load_wmt14(split="test")
 ```
 
-`to_prompt_dataset` keeps one row per prompt, choosing the pair with the smallest
-stable pair ID and retaining its reference. It exposes `dataset`, `prompt_id`,
-`prompt`, `reference`, `reference_id`, and `source_pair_id`. This avoids weighting
-prompts by how many preference comparisons they have and fixes one reference
-for all generated candidates/reward conditions. The source pair ID makes the
-choice auditable. This is a view of the reference-eligible preference cohort,
-not the full universe of prompts available for RL.
+TL;DR and LitBench return a `DatasetDict` if `split` is omitted. WMT defaults
+to `train`, with streaming opt-in, to preserve its original training API.
+All loaders accept `return_metadata=True` to return `(data, metadata_by_split)`.
+Metadata records source provenance, filtering counts where materialized, and
+the split policy. Experiment `prepare` now samples **test** for every dataset
+and saves that policy in the manifest. Existing frozen runs are still checked
+and reused unchanged; use a new run directory to use these splits.
 
-For WMT14 training, use `load_wmt14` directly; it already returns policy
-prompts and references without preference candidates. Do not turn the
-human-ranked WMT14 test set into RL training data.
+## Verified split sizes
 
-Freeze these partitions and reference choices across reward runs. Use validation
-for tuning and reserve test for final generated-model comparisons. SFF also has
-upstream train/validation partitions; check prompt overlap when combining or
-repartitioning sources. `split_by_prompt` protects a supplied corpus, not
-arbitrary separately loaded corpora, near-duplicate prompts, or stories copied
-across different prompts. LitBench-Train is the sole LitBench source here; this
-does not load the official LitBench-Test benchmark.
+Counts below are full loader cohorts, before the experiment runner samples
+(e.g. 2,000 pairs). Audited against public sources on 20 November 2026.
 
-The existing 2,000-pair runs are exploratory reward comparisons. Their LitBench
-prompts come from LitBench-Train, and their Reddit prompts from SFF validation.
-Reserve previously inspected prompts as development data when designing a fresh
-confirmatory evaluation. Pairwise agreement on those saved candidates cannot
-establish the quality or properties of an RL-trained policy. Evaluate generated
-outputs on held-out prompts, including quality measures independent of the
-optimized reward and the single-story reference proxy.
+| Dataset | Train: prompt/reference rows | Test: preference pairs | Test: source prompts |
+| --- | ---: | ---: | ---: |
+| Reddit TL;DR | 116,504 | 22,096 | 4,263 |
+| LitBench, our 80/20 prompt holdout | 9,935 | 7,774 | 1,304 |
+| WMT14 German → English | 4,508,294 parallel rows | 15,142 | 1,466 |
 
-This change supplies the data interfaces; the repository's experiment runner
-still performs offline scoring and does not implement an RL trainer.
+WMT starts from 4,508,785 upstream rows and excludes 491 rows whose German
+source occurs in validation or official test. Its rows are not unique prompts.
+
+Training rows expose no chosen/rejected labels. TL;DR uses original human
+summaries, and WMT uses parallel translations. LitBench training references
+come from its preference corpus, but the training view emits only one
+prompt/reference per prompt; it is not an independently collected unlabelled
+story corpus.
+
+## Reddit TL;DR
+
+The [OpenAI source documentation](https://github.com/openai/summarize-from-feedback#human-feedback-data)
+distinguishes `train`, `valid1` (model selection), and `valid2` (final evaluation).
+The Hugging Face **comparisons validation** shard bundles both valid1 and valid2.
+Our task API uses:
+
+- **Train:** original `tldr_3_filtered/train.jsonl` human summaries, not the
+  smaller comparison-training corpus. From 116,722 source rows, exclude 154
+  whose stripped post text or ID occurs in `valid.jsonl`, then remove 64 repeated
+  formatted prompts. The smallest post ID selects a deterministic reference.
+- **Validation:** SFF comparisons with internal `split="valid1"`, joined to
+  `tldr_3_filtered/valid.jsonl`. Exclude posts also assigned to valid2, leaving
+  **13,983 pairs / 1,556 prompts** after the standard pair filters.
+- **Test:** comparisons with internal `split="valid2"`, joined to the same
+  valid.jsonl references: **22,096 pairs / 4,263 prompts**.
+
+This deliberately differs from the separate, unannotated TL;DR `test.jsonl`:
+our evaluation requires human preferences. Exact source-post overlap is removed
+from train/validation in favour of held-out data. It does not detect paraphrases
+or contamination in a model's pretraining corpus.
+
+References are original human TL;DRs joined by post ID; stripped source posts
+must match. Pair filters exclude news, absent/mismatched references, invalid
+choices, blank or identical texts, references equal to a candidate, and duplicate
+oriented pairs. Conflicting strict preferences remain separate observations.
+The prompt retains the subreddit/title/post and ends with `TL;DR:`.
+
+## LitBench
+
+The public [LitBench-Test](https://huggingface.co/datasets/SAA-Lab/LitBench-Test)
+release has **2,381 comment-ID pairs**, without prompt/story texts or a third
+reference. The [paper](https://arxiv.org/abs/2507.00769) describes 2,480 pairs;
+its authors provide Reddit rehydration code. Those counts are not directly
+usable reference-bearing test rows, and this loader does not claim to load the
+official test benchmark.
+
+With the agreed default, partition all **12,419 nonempty prompts** in
+`SAA-Lab/LitBench-Train` (43,827 rows) using `test_size=0.2`, `seed=1729`.
+Sort prompts before the seeded shuffle, reserve `ceil(0.2 * 12,419) = 2,484`
+for test, and keep **9,935** for training. The split seed is independent of
+benchmark pair-sampling seeds. Whitespace aliases and all stories for a prompt
+stay together. Split **before** selecting references:
+
+- Train: one prompt/reference per prompt, using the story with the highest
+  maximum observed upvotes; a stable content hash breaks ties. Two-story
+  prompts are usable for training.
+- Test: strict chosen/rejected upvote preferences with a third distinct story.
+  Select the highest maximum-observed-upvote story outside each pair, using the
+  same tie-break rule. The 2,484 reserved prompts have 8,954 source rows;
+  reference eligibility leaves **7,774 pairs from 1,304 prompts**. Ineligible
+  held-out prompts never move back into training.
+
+The reference is a creative-writing proxy, not a unique correct answer or an
+independent quality judgment. A reference may be a candidate in another test
+pair, but all such rows stay out of training. `metadata` retains vote counts,
+reference rules and original source-row indices. This partition protects exact
+prompt groups, not stories copied under different prompts or near-duplicates.
+
+## Further validation and historical data
+
+Use `split_by_prompt` on a training cohort to reserve development prompts, or
+`to_prompt_dataset(test_pairs)` to evaluate generated outputs on one reference
+per held-out prompt. Neither operation requires dropping the loader's reference.
+The RL trainer itself is not implemented by the offline experiment runner.
+
+Low-level `load_sff_preferences` and `load_litbench_preferences` preserve the
+previous native comparison APIs for historical reproduction. They do **not**
+provide the task splits above: SFF exposes upstream train/validation comparisons,
+and LitBench exposes the entire LitBench-Train comparison corpus. Do not mix
+those corpora into a model trained/evaluated with the new task partitions.
+
+The existing 2,000-pair runs used all SFF validation and a sample of LitBench-Train.
+They remain exploratory reward comparisons and overlap the new partitions.
+These are held-out splits for future RL training; they are not a fresh blind
+benchmark after all prior reward analysis. For confirmatory claims, account for
+previously inspected prompts and evaluate generated policy outputs with quality
+measures independent of the optimized reward.
 
 ## Local sources and provenance
 
-No local reference file is required. Existing raw files can still be supplied
-for offline/reproducible runs:
+No local reference file is required. Raw files can override downloads:
 
 ```python
-data, metadata = load_sff(
-    split="validation",
-    sff_arrow="raw/sff-validation.arrow",
-    tldr_references="raw/valid.jsonl",
-    cache_dir="artifacts/cache/datasets",
+train = load_sff(
+    split="train",
+    tldr_references="raw/tldr_train.jsonl",
+    tldr_validation_references="raw/tldr_valid.jsonl",
+)
+test, metadata = load_sff(
+    split="test",
+    sff_arrow="raw/sff-validation.arrow",  # Must retain internal valid1/valid2.
+    tldr_references="raw/tldr_valid.jsonl",
     return_metadata=True,
 )
-stories = load_litbench(split="train", litbench_arrow="raw/litbench.arrow")
+stories = load_litbench(litbench_arrow="raw/litbench-train.arrow")
 ```
 
-SFF local overrides require an explicit split to avoid accidentally reusing
-validation references for training. `return_metadata=True` returns
-`(data, metadata_by_split)`, including filtering counts and source fingerprints
-or local paths/checksums. The CLI's existing `--sff-arrow`, `--litbench-arrow`,
-and `--tldr-references` flags delegate to these APIs. Frozen experiment files
-are still checked and reused without reconstructing references.
+SFF overrides require an explicit split. `tldr_references` is the reference
+source for that split; `tldr_validation_references` is the separate overlap
+exclusion corpus for training. Original source fingerprints or local paths and
+checksums are recorded. The CLI's `--sff-arrow`, `--litbench-arrow`, and
+`--tldr-references` flags supply these raw inputs for **test** preparation.
 
 ## WMT14 German to English
 
-```python
-from non_verifiable_rewards.data import load_wmt14, load_wmt14_preferences
+`load_wmt14(split="train", streaming=True)` uses `wmt/wmt14`, config `de-en`:
+**4,508,785** upstream train rows. The task loader excludes **490** train rows
+matching a validation source and **one** matching an official test source,
+leaving **4,508,294**. A full scan found no blank training translations.
+`split="validation"` gives **3,000** unannotated parallel rows, excluding any
+official test sources (none overlap in this release). `split="test"` gives the
+annotated pairs below. For the original parallel splits, including unannotated
+**3,003** newstest parallel rows, explicitly use
+`load_wmt14_parallel(split="test")`; they are not the preference test cohort.
+The parallel helper retains upstream partition membership. Both parallel APIs
+support streaming and `revision=`, strip whitespace, filter blank texts, and
+preserve upstream row indices. Streaming metadata leaves eligible/excluded
+counts unset; count the iterator explicitly when needed. Loading a stream does
+not scan all 4.5M rows to report a size.
 
-# Parallel training examples: prompt + reference, without preference labels.
-train = load_wmt14(split="train", streaming=True)
-
-# Offline reward evaluation: prompt + preferred + rejected + reference.
-evaluation, metadata = load_wmt14_preferences(split="test", return_metadata=True)
-```
-
-The [WMT14 parallel corpus](https://huggingface.co/datasets/wmt/wmt14) `de-en`
-configuration contains **4,508,785 training rows**, **3,000 validation rows**,
-and **3,003 test rows** before blank-text filtering. These are aligned German
-source / English reference pairs; they have no human preference labels.
-`load_wmt14` supports all three splits and optional streaming. It strips outer
-whitespace, removes empty sources/references, preserves source-row indices in
-metadata, and accepts `revision=` for a pinned Hugging Face revision. Counts
-above describe upstream rows, not deduplicated prompts or a downloaded local
-training subset. Audit train/evaluation overlap when choosing an RL cohort.
+The overlap exclusion uses the **official submissions archive's German source**,
+also used by the annotated test loader. The HF parallel test and official archive
+have 303 differing source strings, so substituting HF test text would not protect
+the actual preference cohort. Training also reads the small HF validation split.
+`submissions_archive=` may override the archive for train/validation as well as
+test; its hash is recorded. Streaming and HF revisions do not apply to the
+official annotation archives. Exclusion is by exact stripped source text and
+does not claim to remove paraphrases or unknown pretraining contamination.
 
 `load_wmt14_preferences` uses the official [WMT14 evaluation release](https://www.statmt.org/wmt14/results.html):
 

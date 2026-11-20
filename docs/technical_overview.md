@@ -89,13 +89,14 @@ The reference is not the preference label. It is an auxiliary text supplied to
 metrics such as ROUGE-L and BERTScore. Taking the preferred candidate itself as
 the reference would make those comparisons circular.
 
-The public `load_sff()` and `load_litbench()` functions return this full schema,
-including references and the benchmark filters. Experiment preparation uses
-these same loaders and only samples/serializes their output. No prepared
-benchmark JSON is required for loading. `split_by_prompt` keeps all comparisons
-of a prompt together when creating training/evaluation partitions;
-`to_prompt_dataset` provides one prompt/reference per task for generated
-rollouts. See the [data-loading guide](data_loading.md) for usage and scope.
+The public `load_sff`, `load_litbench`, and `load_wmt14` functions return this
+full schema for `split="test"`; `split="train"` supplies prompt/reference rows
+without preference candidates for RL. New experiment preparation requests test
+for all tasks and records the split policy. No prepared benchmark JSON is
+required for loading. `split_by_prompt` can reserve development prompts, and
+`to_prompt_dataset` makes a prompt/reference view of held-out pairs for generated
+rollouts. The [data-loading guide](data_loading.md) documents current sizes and
+partitions; the counts below describe the historical frozen benchmarks.
 
 ### Reddit TL;DR
 
@@ -121,9 +122,10 @@ POST: {post}
 TL;DR:
 ```
 
-The public loader also supports the SFF training comparisons, joining those to
-`tldr_3_filtered/train.jsonl`. Downloads and joins happen inside the loader;
-the benchmark explicitly requests validation to preserve its original scope.
+The task loader now uses original human TL;DR rows for training, internal SFF
+valid1 comparisons for validation, and valid2 for test, excluding exact source
+overlap from the earlier partitions. The low-level `load_sff_preferences` API
+preserves the native comparison train/validation splits used by earlier runs.
 
 The recorded preparation audit starts with 86,086 source comparisons and keeps
 36,093 eligible pairs from 5,821 prompts. The exclusion counts are 37,367
@@ -139,8 +141,11 @@ majority-vote reconciliation of conflicting labels.
 
 ### LitBench
 
-The source is the **train** split of `SAA-Lab/LitBench-Train`. Using its train
-split here does not train a model: it supplies an offline evaluation sample.
+The historical source is the **train** split of `SAA-Lab/LitBench-Train`.
+New preparation uses our fixed 20% prompt holdout of that corpus, reserving the
+other 80% for RL; it is not the official IDs-only LitBench-Test release.
+Using a source train split for the historical benchmark did not train a model:
+it supplied an offline evaluation sample.
 The labels are Reddit upvote preferences, a noisier proxy for quality than a
 controlled assessment of two complete stories.
 

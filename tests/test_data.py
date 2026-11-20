@@ -5,8 +5,8 @@ import pytest
 from datasets import Dataset, DatasetDict
 
 from non_verifiable_rewards.data import (
-    load_litbench,
-    load_sff,
+    load_litbench_preferences as load_litbench,
+    load_sff_preferences as load_sff,
     split_by_prompt,
     to_prompt_dataset,
 )
@@ -28,6 +28,7 @@ def sff_row(post_id="p", post="Post", **kwargs):
         "info": {"id": post_id, "post": post, "title": "Title", "subreddit": "test"},
         "summaries": [{"text": "Summary A"}, {"text": "Summary B"}],
         "choice": 1,
+        "split": "valid2",
         **kwargs,
     }
 
@@ -260,6 +261,7 @@ def test_prepare_uses_loaders_and_reuses_frozen_data(
 ):
     from non_verifiable_rewards.experiments.data import prepare, sample_pairs
     from non_verifiable_rewards.experiments.io import read_jsonl
+    from non_verifiable_rewards.data import load_litbench, load_sff
 
     config = {
         "run_dir": str(tmp_path / "run"),
@@ -269,20 +271,23 @@ def test_prepare_uses_loaders_and_reuses_frozen_data(
     }
     prepare(config, **local_sources)
     sff = load_sff(
-        split="validation",
+        split="test",
         sff_arrow=local_sources["sff_arrow"],
         tldr_references=local_sources["tldr_references"],
         cache_dir=str(tmp_path / "cache" / "datasets"),
     )
     litbench = load_litbench(
-        split="train", litbench_arrow=local_sources["litbench_arrow"]
+        split="test", litbench_arrow=local_sources["litbench_arrow"]
     )
     for name, pairs in (("reddit_tldr", sff), ("litbench", litbench)):
         saved = read_jsonl(tmp_path / "run" / "data" / f"{name}.jsonl")
         assert saved == sample_pairs(pairs, 1, 7)
     manifest = json.loads((tmp_path / "run" / "data_manifest.json").read_text())
     assert manifest["reddit_tldr"]["audit"]["eligible_pairs"] == 1
-    assert manifest["litbench"]["audit"]["eligible_pairs"] == 18
+    assert manifest["litbench"]["audit"]["eligible_pairs"] == 6
+    assert manifest["litbench"]["split"] == "test"
+    assert manifest["litbench"]["split_policy"]["official_test"] is False
+    assert manifest["reddit_tldr"]["split"] == "test"
 
     def unexpected_load(**kwargs):
         pytest.fail("Frozen data should be reused without loading sources")

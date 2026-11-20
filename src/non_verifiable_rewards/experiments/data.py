@@ -5,7 +5,7 @@ import logging
 import random
 from pathlib import Path
 
-from ..data import load_litbench, load_sff, load_wmt14_preferences
+from ..data import load_litbench, load_sff, load_wmt14
 from .io import configured_datasets, ensure_run, file_sha256, write_json, write_jsonl
 
 logger = logging.getLogger(__name__)
@@ -43,19 +43,19 @@ def prepare(
     cache = str(Path(config["cache_dir"]) / "datasets")
     loaders = {
         "reddit_tldr": lambda: load_sff(
-            split="validation",
+            split="test",
             cache_dir=cache,
             sff_arrow=sff_arrow,
             tldr_references=tldr_references,
             return_metadata=True,
         ),
         "litbench": lambda: load_litbench(
-            split="train",
+            split="test",
             cache_dir=cache,
             litbench_arrow=litbench_arrow,
             return_metadata=True,
         ),
-        "wmt14_de_en": lambda: load_wmt14_preferences(
+        "wmt14_de_en": lambda: load_wmt14(
             split="test",
             cache_dir=cache,
             submissions_archive=wmt14_submissions,
@@ -79,6 +79,8 @@ def prepare(
         write_jsonl(target, selected)
         pd.DataFrame(selected).to_parquet(target.with_suffix(".parquet"), index=False)
         manifest[name] = {
+            "split": "test",
+            "split_policy": metadata["split_policy"],
             "audit": audit,
             "pairs": len(selected),
             "prompts": len({p["prompt_id"] for p in selected}),

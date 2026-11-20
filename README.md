@@ -18,27 +18,27 @@ its distinction from NOVER's full RL reward, and the eight-metric comparison.
 Dataset loaders live in `src/non_verifiable_rewards/data` and are imported with:
 
 ```python
-from non_verifiable_rewards.data import load_litbench, load_sff
+from non_verifiable_rewards.data import load_litbench, load_sff, load_wmt14
+
+train = load_sff(split="train")       # Prompt + human reference for RL.
+test = load_sff(split="test")         # Held-out preferences + separate reference.
+stories = load_litbench()             # Our prompt-disjoint train/test holdout.
+translations = load_wmt14(split="train", streaming=True)
+translation_test = load_wmt14(split="test")
 ```
 
-Both loaders now return `prompt`, `preferred`, `rejected`, **`reference`**, IDs,
-and provenance. SFF joins the original human TL;DR from the matching split;
-LitBench selects a distinct third story for the same prompt. References are
-constructed in the data package, and benchmark preparation uses these same
-loaders. No prepared experiment JSON is needed for direct loading.
+Each loader exposes training prompt/reference rows without preference labels
+and test pairs with `preferred`, `rejected`, and a separate **`reference`**.
+TL;DR reserves SFF valid2 for test and valid1 for validation. LitBench uses our
+reproducible 80/20 prompt holdout of LitBench-Train; its official test release
+contains comment IDs without the texts needed here. WMT test uses official
+human-ranked translations. New benchmark preparation samples these test splits.
 
-For policy rollouts, use `split_by_prompt` to reserve entire prompts, then
-`to_prompt_dataset` to obtain one prompt/reference per task. See the
-[data-loading guide](docs/data_loading.md) for training/evaluation examples,
-local source overrides, and the limitations of the LitBench reference proxy.
-
-WMT14 provides two separate interfaces: `load_wmt14(split="train", streaming=True)`
-for German prompts/English references without preference labels, and
-`load_wmt14_preferences(split="test")` for human-ranked translations with an
-independent English reference. The training corpus has **4,508,785 parallel
-rows** before blank-text filtering. The preference loader yields **15,142
-distinct labeled pairs from 1,466 test sentences**. See the
-[WMT14 data and configuration guide](docs/data_loading.md#wmt14-german-to-english).
+Training has **116,504 TL;DR prompts**, **9,935 LitBench prompts**, and
+**4,508,294 WMT14 parallel rows** after removing validation/test source overlap.
+Test has **22,096**, **7,774**, and **15,142** preference pairs respectively. See the
+[data-loading guide](docs/data_loading.md) for verified counts, reference rules,
+validation splits, local overrides, and compatibility with historical runs.
 
 `configs/eidf_qwen3_4b_three_tasks.toml` enables all three datasets and all reward
 backends, including SMART, in a new output directory. A config can instead set

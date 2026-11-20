@@ -37,14 +37,115 @@ def _parallel_row(row, index, *, split):
     }
 
 
-def load_wmt14(*, split="train", cache_dir=None, streaming=False, revision=None):
+def load_wmt14(
+    *,
+    split="train",
+    cache_dir=None,
+    streaming=False,
+    revision=None,
+    submissions_archive=None,
+    judgments_archive=None,
+    return_metadata=False,
+):
+    """Load parallel train/validation prompts or human-ranked test pairs.
+
+    Train starts from 4,508,785 upstream translations without preferences,
+    excluding exact German sources in validation or official newstest2014.
+    Test uses the official human rankings, with separate references. Test takes
+    precedence over validation. Streaming/revision apply to parallel data;
+    submissions_archive also supplies the source exclusion set for training.
+    Use ``load_wmt14_parallel`` for the original unpartitioned parallel rows.
+    """
+    if split not in ("train", "validation", "test"):
+        raise ValueError("WMT14 split must be 'train', 'validation', or 'test'")
+    if split == "test":
+        if streaming or revision is not None:
+            raise ValueError("WMT14 annotated test does not support streaming/revision")
+        return load_wmt14_preferences(
+            split="test",
+            cache_dir=cache_dir,
+            submissions_archive=submissions_archive,
+            judgments_archive=judgments_archive,
+            return_metadata=return_metadata,
+        )
+    if judgments_archive is not None:
+        raise ValueError("WMT14 judgment overrides apply only to annotated test")
+    downloader = DownloadManager(download_config=DownloadConfig(cache_dir=cache_dir))
+    submissions = Path(submissions_archive or downloader.download(SUBMISSIONS_URL))
+    with tarfile.open(submissions) as archive:
+        _check_archive(archive)
+        heldout = set(
+            _read_member(
+                archive, _SUBMISSIONS_ROOT + "sources/newstest2014-deen-src.de"
+            ).splitlines()
+        )
+    heldout = {source.strip() for source in heldout if source.strip()}
+    if not heldout:
+        raise ValueError("Missing official WMT14 test sources for split exclusion")
+    sources = {
+        "wmt14_heldout_submissions": {
+            "path": str(submissions.resolve()),
+            "sha256": file_sha256(submissions),
+            "url": SUBMISSIONS_URL,
+        }
+    }
+    if split == "train":
+        validation = load_dataset(
+            PARALLEL_DATASET,
+            "de-en",
+            split="validation",
+            cache_dir=cache_dir,
+            streaming=False,
+            revision=revision,
+        )
+        heldout.update(row["translation"]["de"].strip() for row in validation)
+        sources["wmt14_heldout_validation"] = {
+            "dataset": PARALLEL_DATASET,
+            "config": "de-en",
+            "split": "validation",
+            "revision": revision,
+            "fingerprint": validation._fingerprint,
+        }
+    data = load_wmt14_parallel(
+        split=split, cache_dir=cache_dir, streaming=streaming, revision=revision
+    )
+    before = None if streaming else len(data)
+    heldout_prompts = {translation_prompt(source) for source in heldout if source}
+    data = data.filter(lambda row: row["prompt"] not in heldout_prompts)
+    metadata = {
+        split: {
+            "sources": {
+                **sources,
+                "wmt14_parallel": {
+                    "dataset": PARALLEL_DATASET,
+                    "config": "de-en",
+                    "split": split,
+                    "revision": revision,
+                    "streaming": streaming,
+                },
+            },
+            "audit": {
+                "eligible_rows": None if streaming else len(data),
+                "excluded_heldout_source_overlap": None
+                if streaming
+                else before - len(data),
+            },
+            "split_policy": "wmt14_parallel_train_validation_ranked_test_exclude_heldout_sources_v1",
+        }
+    }
+    return (data, metadata) if return_metadata else data
+
+
+def load_wmt14_parallel(
+    *, split="train", cache_dir=None, streaming=False, revision=None
+):
     """Load German prompts/English references without preference labels.
 
     The upstream de-en corpus has 4,508,785 train, 3,000 validation and 3,003
     test rows before blank-text filtering. Train is the RL source; reserve
     validation/test for evaluation. ``streaming=True`` avoids materializing
-    the full training corpus. Use ``load_wmt14_preferences`` for human-ranked
-    evaluation pairs; this loader never invents chosen/rejected outputs.
+    the full training corpus. ``load_wmt14(split='test')`` instead loads
+    human-ranked evaluation pairs.
     """
     if split not in ("train", "validation", "test"):
         raise ValueError(
@@ -220,6 +321,7 @@ def load_wmt14_preferences(
     data = _pair_dataset(pairs, "wmt14_de_en")
     metadata = {
         "test": {
+            "split_policy": "wmt14_parallel_train_validation_ranked_test_exclude_heldout_sources_v1",
             "audit": audit,
             "sources": {
                 name: {
