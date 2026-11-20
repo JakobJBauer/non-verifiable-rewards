@@ -6,6 +6,7 @@ from .bleurt import BLEURTReward
 from .causal_lm import CausalLMScorer
 from .chrf import ChrFPlusPlusReward
 from .length import LengthReward
+from .grpo import GRPORewardAdapter, answer_accuracy_reward
 from .meteor import MeteorReward
 from .nover import NOVERReward
 from .reference_likelihood import ReferenceLikelihoodReward
@@ -20,6 +21,8 @@ __all__ = [
     "CausalLMScorer",
     "ChrFPlusPlusReward",
     "LengthReward",
+    "GRPORewardAdapter",
+    "answer_accuracy_reward",
     "MeteorReward",
     "NOVERReward",
     "ReferenceLikelihoodReward",

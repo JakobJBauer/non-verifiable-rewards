@@ -1,7 +1,8 @@
 # Non-verifiable rewards
 
 Offline reward scoring for Reddit TL;DR, LitBench, and WMT14 German → English
-preference comparisons.
+preference comparisons, plus SuperGPQA data, GRPO reward callbacks and
+generated-answer evaluation.
 Each reward lives in its own module under `src/non_verifiable_rewards/rewards`
 and can also be imported from `non_verifiable_rewards.rewards`.
 
@@ -39,6 +40,13 @@ Training has **116,504 TL;DR prompts**, **9,935 LitBench prompts**, and
 Test has **22,096**, **7,774**, and **15,142** preference pairs respectively. See the
 [data-loading guide](docs/data_loading.md) for verified counts, reference rules,
 validation splits, local overrides, and compatibility with historical runs.
+
+`load_supergpqa()` provides a separate question-answer task with **21,223 train**,
+**2,653 validation**, and **2,653 test** rows in our fixed subject-stratified
+holdout. Its references are correct option texts, not reasoning traces or
+human-preference pairs. See the [SuperGPQA guide](docs/supergpqa.md) for reward
+interpretation, GRPO callback/mixture examples and the generated-answer benchmark.
+The repository supplies these interfaces; it does not yet include a GRPO trainer.
 
 `configs/eidf_qwen3_4b_three_tasks.toml` enables all three datasets and all reward
 backends, including SMART, in a new output directory. A config can instead set

@@ -126,7 +126,7 @@ def test_likelihood_rewards_reject_unknown_task_and_accept_custom_context(cls):
     assert scorer.calls[0][0] == ["custom:input:candidate"]
 
 
-@pytest.mark.parametrize("task", ["summarization", "story_generation", "translation_de_en"])
+@pytest.mark.parametrize("task", ["summarization", "story_generation", "translation_de_en", "multiple_choice"])
 @pytest.mark.parametrize("chat", [False, True])
 def test_all_reference_rewards_send_identical_contexts_and_targets(task, chat):
     scorer = RecordingScorer()
@@ -149,7 +149,7 @@ def test_all_reference_rewards_send_identical_contexts_and_targets(task, chat):
     for candidate, context in zip(("candidate A", "candidate B"), contexts, strict=True):
         assert candidate in context and "source" in context
         assert "held-out target" not in context
-        assert {"summarization": "summary", "story_generation": "story", "translation_de_en": "English translation"}[task] in context
+        assert {"summarization": "summary", "story_generation": "story", "translation_de_en": "English translation", "multiple_choice": "selected option"}[task] in context
         if chat:
             assert context.startswith("USER:") and context.endswith("ASSISTANT:")
 

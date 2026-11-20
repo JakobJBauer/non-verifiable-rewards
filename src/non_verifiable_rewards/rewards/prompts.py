@@ -4,15 +4,39 @@ from collections.abc import Callable
 from functools import partial
 from typing import Literal
 
-Task = Literal["summarization", "story_generation", "translation_de_en"]
+Task = Literal[
+    "summarization", "story_generation", "translation_de_en", "multiple_choice"
+]
 REFERENCE_PROMPT_TEMPLATE = "task_specific_v1"
 
 _TASKS: dict[str, Task] = {
     "reddit_tldr": "summarization",
     "litbench": "story_generation",
     "wmt14_de_en": "translation_de_en",
+    "supergpqa": "multiple_choice",
 }
 _TRANSLATION_INSTRUCTION = "Translate the following German text into English:\n\n"
+_MULTIPLE_CHOICE_INSTRUCTION = (
+    "Answer the following multiple-choice question. There is exactly one correct "
+    "option. You may reason before answering. End your response with a separate "
+    "line in the format 'Answer: X', where X is the letter of your selected option.\n\n"
+)
+
+
+def multiple_choice_prompt(question: str, options: list[str]) -> str:
+    """Policy input contains the question and all options, without a gold label."""
+    if (
+        not question.strip()
+        or not 2 <= len(options) <= 10
+        or any(not x.strip() for x in options)
+    ):
+        raise ValueError(
+            "Multiple-choice prompts need a question and 2..10 nonempty options"
+        )
+    choices = "\n".join(
+        f"{chr(65 + i)}) {text.strip()}" for i, text in enumerate(options)
+    )
+    return _MULTIPLE_CHOICE_INSTRUCTION + question.strip() + "\n" + choices
 
 
 def translation_prompt(source: str) -> str:
@@ -67,8 +91,17 @@ def reference_context(
                 f"{candidate}\n\n"
             )
         return content + "Now write the English translation:\n"
+    if task == "multiple_choice":
+        content = (
+            "Select the correct option for the multiple-choice question below. "
+            "Return the full text of the selected option, without its letter.\n\n"
+            f"Question and options:\n{prompt.removeprefix(_MULTIPLE_CHOICE_INSTRUCTION)}\n\n"
+        )
+        if candidate is not None:
+            content += f"Proposed solution to the same question:\n{candidate}\n\n"
+        return content + "Text of the selected option:\n"
     raise ValueError(
-        "task must be 'summarization', 'story_generation', or 'translation_de_en'"
+        "task must be 'summarization', 'story_generation', 'translation_de_en', or 'multiple_choice'"
     )
 
 
@@ -96,9 +129,14 @@ def make_reference_context(
     *, task: Task = "summarization", tokenizer=None
 ) -> Callable[[str, str | None], str]:
     """Select the shared plain-text or chat-formatted builder for a task."""
-    if task not in ("summarization", "story_generation", "translation_de_en"):
+    if task not in (
+        "summarization",
+        "story_generation",
+        "translation_de_en",
+        "multiple_choice",
+    ):
         raise ValueError(
-            "task must be 'summarization', 'story_generation', or 'translation_de_en'"
+            "task must be 'summarization', 'story_generation', 'translation_de_en', or 'multiple_choice'"
         )
     if tokenizer is None:
         return partial(reference_context, task=task)

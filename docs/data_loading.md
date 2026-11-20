@@ -1,11 +1,16 @@
 # Dataset loading for training and evaluation
 
-All three task loaders expose `split="train"` for policy training with a
+The three preference-task loaders below expose `split="train"` for policy training with a
 `prompt` and `reference`, and `split="test"` for offline reward evaluation with
 `prompt`, `preferred`, `rejected`, and a separate `reference`. References are
 loaded or constructed in the data package; no prepared experiment JSON is
 required. Only the prompt goes to the generating policy. The reference is
 reward-side data, never part of the policy input.
+
+SuperGPQA is a separate question-answer task: `load_supergpqa` returns questions,
+correct option references and answer keys, with our own 80/10/10 split. Its test
+rows do not have preference pairs. See the [SuperGPQA guide](supergpqa.md) for
+split sizes, GRPO reward adapters and generated-answer evaluation.
 
 ```python
 from non_verifiable_rewards.data import load_sff, load_litbench, load_wmt14

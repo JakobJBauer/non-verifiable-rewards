@@ -49,6 +49,11 @@ BACKEND_REWARDS = {
 def configured_datasets(config):
     """Explicit dataset scope; omitted scope preserves historical two-task runs."""
     names = config.get("datasets", LEGACY_DATASETS)
+    if isinstance(names, (list, tuple)) and "supergpqa" in names:
+        raise ValueError(
+            "SuperGPQA has answer keys, not preference pairs; use load_supergpqa "
+            "and python -m non_verifiable_rewards.reasoning for generated-answer evaluation"
+        )
     if (
         not isinstance(names, (list, tuple))
         or not names
