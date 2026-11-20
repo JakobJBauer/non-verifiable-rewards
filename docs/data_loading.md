@@ -107,6 +107,11 @@ prompt groups, not stories copied under different prompts or near-duplicates.
 
 ## Further validation and historical data
 
+Published adaptation:
+[JJBauer/LitBench-Reference-Splits](https://huggingface.co/datasets/JJBauer/LitBench-Reference-Splits),
+initial Hub revision `c3447bdd21e25ccd3b3a25d92f881749dbec3255`.
+It contains 9,935 training prompt/reference rows and 7,774 test preference pairs.
+
 The LitBench adaptation can be exported and published with
 `scripts/publish_litbench.py`. Its [dataset card](litbench_dataset_card.md)
 documents the inherited upvote preferences, reference construction, original
