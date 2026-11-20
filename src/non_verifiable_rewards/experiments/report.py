@@ -52,7 +52,7 @@ def caption(config):
     models = config["models"]
     text = f"{config['name']} · {models['lm']['id'].split('/')[-1]} · {models['bertscore']['id'].split('/')[-1]} · {models['bleurt']['name']}"
     if "reference_likelihood" not in config.get("report_rewards", REWARDS):
-        text += " (Qwen: smoke check only)"
+        text += " (Qwen excluded from this report)"
     if config["pilot"]:
         text += "\nBase neural scores use capped text; SMART, METEOR and lexical rewards use full outputs. Pipeline validation only."
     else:
@@ -569,7 +569,7 @@ def write_reports(result, config):
     )
     if "reference_likelihood" not in result["rewards"]:
         model_description += (
-            " (Qwen smoke check only; excluded from benchmark accuracy)"
+            " (Qwen excluded from this report)"
         )
     limits = f"Prompt ≤ {config['max_prompt_tokens']} Qwen tokens; candidate ≤ {config['max_candidate_tokens']}; reference ≤ {config['max_reference_tokens']} (zero means unlimited)."
     notes = [
@@ -749,6 +749,8 @@ def write_reports(result, config):
         ("input_coverage", "Input shortening"),
         ("runtime", "Runtime"),
     ]
+    if "reference_likelihood" not in result["rewards"] and scope_reason:
+        figures = [item for item in figures if item[0] != "qwen_smoke_check"]
     markdown = f"# {config['name']}\n\n{model_description}\n\n" + "\n".join(
         "- " + note for note in notes
     )
@@ -858,4 +860,4 @@ def generate_report(config):
             },
         },
     )
-    logger.info("Wrote %s/report.html and eight PNG/PDF figures", run)
+    logger.info("Wrote %s/report.html and PNG/PDF figures", run)
