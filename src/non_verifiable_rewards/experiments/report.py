@@ -22,6 +22,8 @@ LABELS = {
     "rouge_l": "ROUGE-L",
     "bertscore": "BERTScore",
     "bleurt": "BLEURT",
+    "smart1_bertscore": "SMART-1 BERTScore",
+    "smart1_bleurt": "SMART-1 BLEURT",
     "self_certainty": "Self-certainty",
     "reference_likelihood": "Reference likelihood",
     "vr_cli": "VR-CLI",
@@ -35,6 +37,7 @@ COLORS = dict(
         strict=True,
     )
 )
+COLORS.update(smart1_bertscore="#44AA99", smart1_bleurt="#CC6677")
 
 
 def caption(config):
@@ -43,7 +46,7 @@ def caption(config):
     if "reference_likelihood" not in config.get("report_rewards", REWARDS):
         text += " (Qwen: smoke check only)"
     if config["pilot"]:
-        text += "\nNeural scores use capped text; ROUGE-L and the length baseline use full outputs. Pipeline validation only."
+        text += "\nBase neural scores use capped text; SMART, ROUGE-L and length use full outputs. Pipeline validation only."
     else:
         text += "\nEncoder metrics may truncate; see coverage. Confidence intervals resample prompts."
     return text
@@ -443,6 +446,10 @@ def runtime_figure(result, config):
     labels = ["ROUGE-L + length", "BERTScore", "BLEURT", "Qwen: all 3 LM rewards"]
     if "reference_likelihood" not in result["rewards"]:
         order, labels = order[:-1], labels[:-1]
+    for reward in ("smart1_bertscore", "smart1_bleurt"):
+        if reward in result["rewards"]:
+            order.append(reward)
+            labels.append(LABELS[reward])
     for index, name in enumerate(DATASETS):
         rows = (
             result["runtime"].query("dataset == @name").set_index("backend").loc[order]

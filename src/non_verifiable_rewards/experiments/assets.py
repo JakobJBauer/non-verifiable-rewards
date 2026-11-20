@@ -63,17 +63,53 @@ def download_models(config):
         "archive_sha256": file_sha256(archive),
         "path": str(target),
     }
+    if config.get("include_smart_rewards", False):
+        manifest["punkt"] = download_punkt(cache)
     write_json(manifest_path, manifest)
     return manifest
 
 
 def model_paths(config):
     manifest = json.loads((Path(config["run_dir"]) / "models.json").read_text())
-    if set(manifest) != {"lm", "bertscore", "bleurt"}:
+    expected = {"lm", "bertscore", "bleurt"}
+    if config.get("include_smart_rewards", False):
+        expected.add("punkt")
+    if set(manifest) != expected:
         raise ValueError("Run download first; the model manifest is incomplete")
     for item in manifest.values():
         if not Path(item["path"]).is_dir():
             raise FileNotFoundError(
                 f"Checkpoint missing: {item['path']}. Run download on this machine."
             )
+    if "punkt" in manifest:
+        spec = manifest["punkt"]
+        for name, checksum in spec["files_sha256"].items():
+            if file_sha256(Path(spec["path"]) / name) != checksum:
+                raise ValueError("SMART sentence tokenizer changed after download")
     return manifest
+
+
+def download_punkt(cache):
+    """Freeze the four English Punkt tables alongside model assets."""
+    url = "https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/tokenizers/punkt_tab.zip"
+    archive = download_file(url, Path(cache) / "nltk" / "punkt_tab.zip")
+    target = archive.parent / "punkt_tab" / "english"
+    target.mkdir(parents=True, exist_ok=True)
+    files = (
+        "collocations.tab",
+        "sent_starters.txt",
+        "abbrev_types.txt",
+        "ortho_context.tab",
+    )
+    with zipfile.ZipFile(archive) as bundle:
+        for name in files:
+            path = target / name
+            if not path.exists():
+                path.write_bytes(bundle.read(f"punkt_tab/english/{name}"))
+    return {
+        "id": "nltk-punkt-english",
+        "url": url,
+        "archive_sha256": file_sha256(archive),
+        "files_sha256": {name: file_sha256(target / name) for name in files},
+        "path": str(target),
+    }

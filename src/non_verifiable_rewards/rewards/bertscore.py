@@ -37,6 +37,33 @@ class BERTScoreReward:
         }
         self._scorer = None
 
+    def _load_scorer(self):
+        if self._scorer is None:
+            try:
+                from bert_score import BERTScorer
+            except ImportError as exc:
+                raise ImportError(
+                    "Install BERTScore with: uv sync --extra bertscore"
+                ) from exc
+            self._scorer = BERTScorer(**self._options)
+        return self._scorer
+
+    def _encode(self, text, *, add_special_tokens=True):
+        from transformers import GPT2Tokenizer, RobertaTokenizer
+
+        tokenizer = self._scorer._tokenizer
+        encode_options = (
+            {"add_prefix_space": True}
+            if isinstance(tokenizer, (GPT2Tokenizer, RobertaTokenizer))
+            else {}
+        )
+        return tokenizer.encode(
+            text.strip(),
+            add_special_tokens=add_special_tokens,
+            truncation=False,
+            **encode_options,
+        )
+
     def score(
         self,
         candidates: Sequence[str],
@@ -49,36 +76,11 @@ class BERTScoreReward:
         )
         if not candidates:
             return []
-        if self._scorer is None:
-            try:
-                from bert_score import BERTScorer
-            except ImportError as exc:
-                raise ImportError(
-                    "Install BERTScore with: uv sync --extra bertscore"
-                ) from exc
-            self._scorer = BERTScorer(**self._options)
-
+        self._load_scorer()
         # BERTScore 0.3.x truncates internally; check before it can do so silently.
-        from transformers import GPT2Tokenizer, RobertaTokenizer
-
-        tokenizer = self._scorer._tokenizer
-        limit = tokenizer.model_max_length
-        encode_options = (
-            {"add_prefix_space": True}
-            if isinstance(tokenizer, (GPT2Tokenizer, RobertaTokenizer))
-            else {}
-        )
+        limit = self._scorer._tokenizer.model_max_length
         too_long = any(
-            len(
-                tokenizer.encode(
-                    text.strip(),
-                    add_special_tokens=True,
-                    truncation=False,
-                    **encode_options,
-                )
-            )
-            > limit
-            for text in candidates + references
+            len(self._encode(text)) > limit for text in candidates + references
         )
         check_truncation(
             too_long,

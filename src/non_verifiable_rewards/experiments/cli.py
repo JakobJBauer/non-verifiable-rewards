@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .io import BACKENDS, DATASETS, ensure_run, load_config
+from .io import BACKENDS, DATASETS, enabled_backends, ensure_run, load_config
 
 
 def main():
@@ -49,7 +49,7 @@ def main():
     scope.add_argument(
         "--skip-lm",
         action="store_true",
-        help="For run: skip LM inference and report the four completed metrics",
+        help="For run: skip LM inference and report the enabled non-LM metrics",
     )
     args = parser.parse_args()
     if (args.lm_smoke_only or args.skip_lm) and args.command != "run":
@@ -131,7 +131,7 @@ def main():
     if args.command == "run":
         run = ensure_run(config)
         (run / "logs").mkdir(exist_ok=True)
-        for backend in BACKENDS:
+        for backend in enabled_backends(config):
             mode = lm_mode(config)
             if backend == "lm" and mode == "skip":
                 continue

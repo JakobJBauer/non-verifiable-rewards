@@ -15,6 +15,8 @@ from ..rewards import (
     CausalLMScorer,
     LengthReward,
     RougeLReward,
+    SMART1BERTScoreReward,
+    SMART1BLEURTReward,
     VRCLIReward,
 )
 from ..rewards.vr_cli import vr_cli_context
@@ -22,11 +24,14 @@ from .assets import model_paths
 from .io import (
     BACKEND_REWARDS,
     DATASETS,
+    SMART_REWARDS,
     Journal,
     digest,
+    enabled_backends,
     ensure_run,
     file_sha256,
     read_jsonl,
+    run_rewards,
     utc_now,
     write_json,
 )
@@ -78,19 +83,25 @@ class Backend:
         self.baselines = {}
         if name == "lexical":
             self.rouge, self.length = RougeLReward(), LengthReward()
-        elif name == "bertscore":
+        elif name in ("bertscore", "smart1_bertscore"):
             import torch
 
             torch.set_num_threads(config["threads"])
-            self.reward = BERTScoreReward(
-                models[name]["path"],
-                num_layers=config["models"][name]["num_layers"],
+            cls = SMART1BERTScoreReward if name in SMART_REWARDS else BERTScoreReward
+            options = (
+                {"punkt_path": models["punkt"]["path"]}
+                if name in SMART_REWARDS
+                else {"allow_truncation": config["allow_metric_truncation"]}
+            )
+            self.reward = cls(
+                models["bertscore"]["path"],
+                num_layers=config["models"]["bertscore"]["num_layers"],
                 batch_size=config["batch_size"],
                 device=config["device"],
-                allow_truncation=config["allow_metric_truncation"],
+                **options,
             )
             self.reward.score(["A warmup sentence."], references=["A warmup sentence."])
-        elif name == "bleurt":
+        elif name in ("bleurt", "smart1_bleurt"):
             import tensorflow as tf
 
             if config["device"] == "cpu":
@@ -103,10 +114,16 @@ class Backend:
                     )
                 for device in devices:
                     tf.config.experimental.set_memory_growth(device, True)
-            self.reward = BLEURTReward(
-                models[name]["path"],
+            cls = SMART1BLEURTReward if name in SMART_REWARDS else BLEURTReward
+            options = (
+                {"punkt_path": models["punkt"]["path"]}
+                if name in SMART_REWARDS
+                else {"allow_truncation": config["allow_metric_truncation"]}
+            )
+            self.reward = cls(
+                models["bleurt"]["path"],
                 batch_size=config["batch_size"],
-                allow_truncation=config["allow_metric_truncation"],
+                **options,
             )
             self.reward.score(["A warmup sentence."], references=["A warmup sentence."])
         elif name == "lm":
@@ -204,6 +221,13 @@ class Backend:
             values["length"] = self.length.score(original_candidates)
         elif self.name in ("bertscore", "bleurt"):
             values[self.name] = self.reward.score(candidates, references=references)
+        elif self.name in SMART_REWARDS:
+            results = self.reward.score_with_details(
+                [original["preferred"], original["rejected"]],
+                references=[original["reference"]] * 2,
+            )
+            values[self.name] = [item["f1"] for item in results]
+            details[self.name] = dict(zip(("preferred", "rejected"), results, strict=True))
         else:
             tokenizer = self.scorer.tokenizer
             baseline_context = vrcli_chat_context(
@@ -294,6 +318,7 @@ class Backend:
                     "candidate_tokens": candidate_tokens,
                 }
         native = self.native_truncation(pair)
+        uses_full_text = self.name == "lexical" or self.name in SMART_REWARDS
         rows = []
         for reward, scores in values.items():
             for index, side in enumerate(("preferred", "rejected")):
@@ -302,7 +327,7 @@ class Backend:
                     used_fields.append("reference")
                 if self.name == "lm":
                     used_fields.append("prompt")
-                prefix_truncated = self.name != "lexical" and any(
+                prefix_truncated = not uses_full_text and any(
                     pair["lengths"][field]["truncated"] for field in used_fields
                 )
                 value = float(scores[index])
@@ -327,13 +352,13 @@ class Backend:
                         ],
                         "scored_candidate_words": pair["lengths"][side][
                             "original_words"
-                            if self.name == "lexical"
+                            if uses_full_text
                             else "scored_words"
                         ],
                         "reference_prefix_overlaps_candidate": pair[
                             "reference_prefix_overlaps_candidate"
                         ]
-                        if self.name != "lexical"
+                        if not uses_full_text
                         else False,
                         "statistics": details.get(reward, {}).get(side, {}),
                     }
@@ -366,7 +391,11 @@ def failure_rows(pair, backend, error):
 def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
     if num_shards < 1 or not 0 <= shard_index < num_shards:
         raise ValueError("Require 0 <= shard_index < num_shards")
+    if backend not in enabled_backends(config):
+        raise ValueError(f"Backend {backend!r} is disabled; enable include_smart_rewards in a new run")
     run = ensure_run(config)
+    if backend in SMART_REWARDS and backend not in run_rewards(run):
+        raise ValueError("SMART reward set changed; choose a new run_dir for scoring")
     models = model_paths(config)
     data_manifest = json.loads((run / "data_manifest.json").read_text())
     preprocessing = json.loads((run / "preprocessing.json").read_text())
@@ -504,7 +533,7 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
             }
         )
         if (
-            backend in ("lm", "bertscore")
+            backend in ("lm", "bertscore", "smart1_bertscore")
             and config["device"] == "cuda"
             and engine is not None
         ):

@@ -16,7 +16,8 @@ from .._hashing import digest, file_sha256
 
 SCHEMA_VERSION = 1
 DATASETS = ("reddit_tldr", "litbench")
-BACKENDS = ("lexical", "bertscore", "bleurt", "lm")
+SMART_REWARDS = ("smart1_bertscore", "smart1_bleurt")
+BACKENDS = ("lexical", "bertscore", "bleurt", "lm", *SMART_REWARDS)
 REWARDS = (
     "rouge_l",
     "bertscore",
@@ -26,12 +27,35 @@ REWARDS = (
     "vr_cli",
     "length",
 )
+ALL_REWARDS = (*REWARDS, *SMART_REWARDS)
 BACKEND_REWARDS = {
     "lexical": ("rouge_l", "length"),
     "bertscore": ("bertscore",),
     "bleurt": ("bleurt",),
+    "smart1_bertscore": ("smart1_bertscore",),
+    "smart1_bleurt": ("smart1_bleurt",),
     "lm": ("self_certainty", "reference_likelihood", "vr_cli"),
 }
+
+
+def configured_rewards(config):
+    enabled = config.get("include_smart_rewards", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("include_smart_rewards must be a boolean")
+    return ALL_REWARDS if enabled else REWARDS
+
+
+def enabled_backends(config):
+    rewards = configured_rewards(config)
+    return tuple(name for name in BACKENDS if set(BACKEND_REWARDS[name]) & set(rewards))
+
+
+def run_rewards(run):
+    """Use the recorded reward set; historical runs contain the base rewards."""
+    path = Path(run) / "environment.json"
+    if path.exists():
+        return tuple(json.loads(path.read_text()).get("rewards", REWARDS))
+    return REWARDS
 
 
 def utc_now():
@@ -81,6 +105,7 @@ def load_config(path):
             raise ValueError(f"{key} must be a nonnegative integer")
     if config["device"] not in ("cpu", "cuda"):
         raise ValueError("device must be cpu or cuda")
+    configured_rewards(config)
     return config
 
 
@@ -117,6 +142,7 @@ def ensure_run(config):
             "platform": platform.platform(),
             "cpu_count": os.cpu_count(),
             "schema_version": SCHEMA_VERSION,
+            "rewards": configured_rewards(config),
             "config_sha256": digest(config),
             "code_sha256_at_creation": code_digest(),
             "packages": {

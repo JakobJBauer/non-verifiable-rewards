@@ -198,6 +198,11 @@ Importing reward modules does not load PyTorch, TensorFlow, Transformers, or any
 model weights. BERTScore and BLEURT load on their first nonempty scoring call.
 The causal LM is loaded explicitly and can be shared by all three LM rewards.
 
+For long texts, the two [SMART-1 rewards](docs/smart_rewards.md) aggregate sentence
+matches without truncating the text. Enable them in experiments with
+`include_smart_rewards = true` in a new run config; see
+[`configs/eidf_smart_qwen3_4b.toml`](configs/eidf_smart_qwen3_4b.toml).
+
 ## Common interface
 
 All rewards implement:
@@ -217,6 +222,8 @@ lengths, and empty references raise errors.
 | `RougeLReward` / `rouge_l.py` | ROUGE-L F1, with stemming by default | references |
 | `BERTScoreReward` / `bertscore.py` | BERTScore F1; `roberta-large`, no IDF or baseline rescaling by default | references |
 | `BLEURTReward` / `bleurt.py` | Raw learned regression score; not restricted to [0, 1] | references |
+| `SMART1BERTScoreReward` / `smart.py` | Reference-only SMART-1 F1 with BERTScore sentence matches; full text coverage | references |
+| `SMART1BLEURTReward` / `smart.py` | Reference-only SMART-1 F1 with BLEURT sentence matches; full text coverage | references |
 | `SelfCertaintyReward` / `self_certainty.py` | Mean KL(uniform \|\| next-token distribution) | prompts |
 | `ReferenceLikelihoodReward` / `reference_likelihood.py` | log p(reference \| prompt, candidate) | prompts, references |
 | `VRCLIReward` / `vr_cli.py` | Continuous percent improvement in reference perplexity | prompts, references |

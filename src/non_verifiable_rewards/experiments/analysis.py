@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .io import BACKENDS, DATASETS, REWARDS, read_jsonl, write_jsonl
+from .io import ALL_REWARDS, BACKENDS, DATASETS, read_jsonl, run_rewards, write_jsonl
 
 
 def preference_credit(margins, tolerance=1e-7):
@@ -45,12 +45,12 @@ def report_rewards(config):
     rewards = (
         tuple(json.loads(path.read_text())["benchmark_rewards"])
         if path.exists()
-        else REWARDS
+        else run_rewards(config["run_dir"])
     )
     if (
         len(rewards) != len(set(rewards))
         or "length" not in rewards
-        or not set(rewards).issubset(REWARDS)
+        or not set(rewards).issubset(ALL_REWARDS)
     ):
         raise ValueError(
             "The report scope must contain distinct known rewards and the length baseline"
@@ -58,8 +58,10 @@ def report_rewards(config):
     return rewards
 
 
-def load_results(run, required_rewards=REWARDS):
+def load_results(run, required_rewards=None):
     run = Path(run)
+    if required_rewards is None:
+        required_rewards = report_rewards({"run_dir": str(run)})
     originals = {name: read_jsonl(run / "data" / f"{name}.jsonl") for name in DATASETS}
     rows, timing_rows = [], []
     for backend in BACKENDS:
@@ -95,7 +97,7 @@ def load_results(run, required_rewards=REWARDS):
         for name, pairs in originals.items()
         for pair in pairs
         for side in ("preferred", "rejected")
-        for reward in REWARDS
+        for reward in ALL_REWARDS
     }
     observed = set(scores[keys].itertuples(index=False, name=None))
     required = {key for key in expected if key[-1] in required_rewards}
@@ -162,7 +164,9 @@ def analyze(config):
         margins = margins.dropna()
         if margins.empty:
             raise ValueError(f"No pairs have complete scores for all rewards on {name}")
-        for reward in REWARDS:
+        for reward in ALL_REWARDS:
+            if reward not in rewards and reward not in set(scores.reward):
+                continue
             reward_rows = subset[subset.reward == reward]
             valid = reward_rows[reward_rows.status == "ok"]
             complete_pairs = int((valid.groupby("pair_id").size() == 2).sum())

@@ -28,6 +28,17 @@ class BLEURTReward:
         self.allow_truncation = allow_truncation
         self._scorer = None
 
+    def _load_scorer(self):
+        if self._scorer is None:
+            try:
+                from bleurt.score import BleurtScorer
+            except ImportError as exc:
+                raise ImportError(
+                    "Install BLEURT with: uv sync --extra bleurt"
+                ) from exc
+            self._scorer = BleurtScorer(self.checkpoint)
+        return self._scorer
+
     def score(
         self,
         candidates: Sequence[str],
@@ -40,15 +51,7 @@ class BLEURTReward:
         )
         if not candidates:
             return []
-        if self._scorer is None:
-            try:
-                from bleurt.score import BleurtScorer
-            except ImportError as exc:
-                raise ImportError(
-                    "Install BLEURT with: uv sync --extra bleurt"
-                ) from exc
-            self._scorer = BleurtScorer(self.checkpoint)
-
+        self._load_scorer()
         tokenizer = self._scorer.tokenizer
         limit = self._scorer.max_seq_length
         too_long = any(

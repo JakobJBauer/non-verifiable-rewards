@@ -30,9 +30,14 @@ export TRANSFORMERS_OFFLINE=1
 NVR_FAILURES=0
 "$NVR_PYTHON" -m non_verifiable_rewards.experiments score --config "$NVR_CONFIG" --backend lexical > "$NVR_RUN_DIR/logs/lexical-console.log" 2>&1 &
 NVR_LEXICAL_PID=$!
-for NVR_BACKEND in lm bertscore bleurt; do
+NVR_BACKENDS=(lm bertscore bleurt)
+NVR_SMART_ENABLED="$("$NVR_PYTHON" -c 'import sys,tomllib; print(tomllib.load(open(sys.argv[1], "rb")).get("include_smart_rewards", False))' "$NVR_CONFIG")"
+if [ "$NVR_SMART_ENABLED" = True ]; then
+    NVR_BACKENDS+=(smart1_bertscore smart1_bleurt)
+fi
+for NVR_BACKEND in "${NVR_BACKENDS[@]}"; do
     NVR_WORKER=("$NVR_PYTHON")
-    if [ "$NVR_BACKEND" = bleurt ]; then
+    if [[ "$NVR_BACKEND" = bleurt || "$NVR_BACKEND" = smart1_bleurt ]]; then
         NVR_WORKER=(env "LD_LIBRARY_PATH=$NVR_TF_LIBRARIES${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$NVR_BLEURT_PYTHON")
     fi
     if ! "${NVR_WORKER[@]}" -m non_verifiable_rewards.experiments score --config "$NVR_CONFIG" --backend "$NVR_BACKEND" > "$NVR_RUN_DIR/logs/$NVR_BACKEND-console.log" 2>&1; then

@@ -1521,6 +1521,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
+    { name = "nltk" },
     { name = "rouge-score" },
 ]
 
@@ -1556,6 +1557,7 @@ requires-dist = [
     { name = "bleurt", marker = "extra == 'bleurt'", git = "https://github.com/google-research/bleurt.git?rev=cebe7e6f996b40910cfaa520a63db47807e3bf5c" },
     { name = "datasets", specifier = ">=5.2.0" },
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.9" },
+    { name = "nltk", specifier = ">=3.9,<4" },
     { name = "pandas", marker = "extra == 'benchmark'", specifier = ">=2.2" },
     { name = "rouge-score", specifier = ">=0.1.2" },
     { name = "scipy", marker = "extra == 'benchmark'", specifier = ">=1.14" },

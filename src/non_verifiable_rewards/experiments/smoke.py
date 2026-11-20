@@ -8,6 +8,7 @@ from pathlib import Path
 from .io import (
     BACKEND_REWARDS,
     DATASETS,
+    SMART_REWARDS,
     Journal,
     digest,
     ensure_run,
@@ -25,7 +26,9 @@ def set_lm_scope(config, *, skip=False):
     path = run / "evaluation_scope.json"
     scope = json.loads(path.read_text()) if path.exists() else {}
     scope.update(
-        benchmark_rewards=list(PILOT_REWARDS),
+        benchmark_rewards=list(PILOT_REWARDS) + (
+            list(SMART_REWARDS) if config.get("include_smart_rewards", False) else []
+        ),
         lm_mode="skip" if skip else "smoke",
         partial_lm_used_in_accuracy_figures=False,
     )
