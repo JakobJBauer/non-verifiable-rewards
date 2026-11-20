@@ -182,6 +182,7 @@ def load_litbench(
     split=None,
     cache_dir=None,
     litbench_arrow=None,
+    revision=None,
     test_size=0.2,
     seed=1729,
     return_metadata=False,
@@ -196,15 +197,23 @@ def load_litbench(
     The official LitBench-Test release provides comment IDs only, insufficient
     for this reference-bearing schema. The derived split is identified in the
     metadata. Its fixed split seed is independent of benchmark sampling seeds.
+    ``revision`` pins the Hugging Face source when no local Arrow is supplied.
     """
     if split not in (None, "train", "test"):
         raise ValueError("LitBench split must be 'train' or 'test'")
     raw = (
         Dataset.from_file(str(litbench_arrow))
         if litbench_arrow is not None
-        else load_dataset("SAA-Lab/LitBench-Train", split="train", cache_dir=cache_dir)
+        else load_dataset(
+            "SAA-Lab/LitBench-Train",
+            split="train",
+            cache_dir=cache_dir,
+            revision=revision,
+        )
     )
     source = _source_info(raw, litbench_arrow, "SAA-Lab/LitBench-Train", "train")
+    if litbench_arrow is None and revision is not None:
+        source["revision"] = revision
     raw = raw.add_column("_source_row", list(range(len(raw))))
     raw = raw.add_column("dataset", ["litbench"] * len(raw))
     usable = raw.select([i for i, prompt in enumerate(raw["prompt"]) if _text(prompt)])

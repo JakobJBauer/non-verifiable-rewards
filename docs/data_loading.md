@@ -107,6 +107,25 @@ prompt groups, not stories copied under different prompts or near-duplicates.
 
 ## Further validation and historical data
 
+The LitBench adaptation can be exported and published with
+`scripts/publish_litbench.py`. Its [dataset card](litbench_dataset_card.md)
+documents the inherited upvote preferences, reference construction, original
+LitBench citation, and source licensing information. Export pins the upstream
+revision, includes the committed reproduction code and checksums, and verifies
+that both Parquet splits load together. Publication fills absent training
+candidate fields with nulls; it does not create training preference labels.
+
+```bash
+uv run python scripts/publish_litbench.py export \
+  --output outputs/litbench-reference-splits --repo-id OWNER/LitBench-Reference-Splits
+uv run python scripts/publish_litbench.py upload \
+  --output outputs/litbench-reference-splits --repo-id OWNER/LitBench-Reference-Splits
+```
+
+The upload uses an existing Hugging Face login, creates a public dataset, and
+refuses to overwrite an existing release. Large generated data files live in
+the Hub repository; the exporter and card are committed in this code repository.
+
 Use `split_by_prompt` on a training cohort to reserve development prompts, or
 `to_prompt_dataset(test_pairs)` to evaluate generated outputs on one reference
 per held-out prompt. Neither operation requires dropping the loader's reference.
