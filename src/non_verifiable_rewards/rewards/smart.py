@@ -210,6 +210,7 @@ class SMART1BERTScoreReward(_SMART1Reward):
                 batch_size=batch_size,
                 device=device,
                 lang=lang,
+                cache_on_device=True,
             ),
             segment_tokens,
             sentence_splitter,
@@ -243,7 +244,7 @@ class SMART1BLEURTReward(_SMART1Reward):
         punkt_path=None,
     ):
         self._configure(
-            BLEURTReward(checkpoint, batch_size=batch_size),
+            BLEURTReward(checkpoint, batch_size=batch_size, length_batching=True),
             segment_tokens,
             sentence_splitter,
             punkt_path,

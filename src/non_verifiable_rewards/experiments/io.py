@@ -154,6 +154,8 @@ def load_config(path):
             raise ValueError(f"{key} must be a nonnegative integer")
     if config["device"] not in ("cpu", "cuda"):
         raise ValueError("device must be cpu or cuda")
+    if not isinstance(config.get("bleurt_tf32", True), bool):
+        raise ValueError("bleurt_tf32 must be a boolean")
     configured_rewards(config)
     configured_datasets(config)
     return config

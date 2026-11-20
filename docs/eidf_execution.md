@@ -31,6 +31,21 @@ activity is used to keep it alive.
 
 ## Environment and execution
 
+The three-dataset, thirteen-reward run uses
+[`configs/eidf_qwen3_4b_all_rewards_20261120.toml`](../configs/eidf_qwen3_4b_all_rewards_20261120.toml)
+and [`scripts/run_eidf_parallel.sh`](../scripts/run_eidf_parallel.sh). This H200
+schedule runs the LM and encoder groups concurrently, with three disjoint
+SMART-BLEURT shards. It requires the larger H200 memory budget; use the original
+sequential launcher on smaller GPUs. A run lock prevents duplicate orchestration.
+Keep the shard count fixed on resume. Runtime measurements include contention.
+
+The dated config disables TensorFlow TF32, uses 256 sentence pairs per encoder
+batch and two CPU threads per worker. SMART uses [padding/embedding reuse
+optimizations](smart_rewards.md) without dropping any sentence comparisons.
+The initial slow attempt remains in `qwen3_4b_all_rewards_20261120`; the fresh
+run with these scoring settings uses `qwen3_4b_all_rewards_20261120_batched`.
+It reuses frozen inputs and pinned model assets, and recomputes every score.
+
 [`scripts/bootstrap_eidf.sh`](../scripts/bootstrap_eidf.sh) is the complete
 setup entry point. It consolidates the successful commands from the original
 run, including the TensorFlow library-path fix. It installs and checks:

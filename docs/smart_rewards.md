@@ -72,12 +72,24 @@ Imports and empty batches load no model or sentence resources.
 
 Each call flattens all sentence pairs into one call to the existing metric.
 BLEURT evaluates `m*n` joint pairs per candidate/reference comparison, in batches.
-BERTScore's library deduplicates strings within the call, encodes each unique
-segment once, then performs the token-similarity comparisons. Supplying both
+BERTScore encodes each unique segment once with the upstream library, retains
+embeddings on the scoring device, and uses upstream greedy cosine matching.
+It gathers copies for each batch, since matching normalizes its inputs in place.
+Supplying both
 candidate stories and their shared reference together reuses reference
 embeddings. There is no cross-call cache. Total similarity work and the pair
 lists remain quadratic in the number of segments; start with a pilot to measure
 BLEURT cost on the actual length distribution.
+
+SMART-BLEURT uses the official `LengthBatchingBleurtScorer` for checkpoints
+supporting dynamic sequence lengths (including BLEURT-20). This sorts sentence
+pairs into batches, removes only padding, and restores the original pair order;
+static checkpoints keep fixed padding. Token-limit checks also reuse the
+lengths of repeated strings. Neither optimization removes sentence comparisons
+or changes the aggregation. Floating-point differences from batching remain.
+The experiment config can set `bleurt_tf32 = false` to disable TensorFlow's
+reduced-precision TF32 GPU math for both BLEURT variants. The dated full run uses
+this setting; omitted settings preserve the previous TensorFlow default.
 
 ## Experiment comparison
 

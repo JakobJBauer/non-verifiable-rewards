@@ -651,6 +651,21 @@ def write_reports(result, config):
             "truncation. BLEURT can yield nonpositive components; diagnostic flags are "
             "retained and its raw harmonic mean is not silently clipped."
         )
+    if (run / "execution" / "parallel_workers.sh").exists():
+        notes.append(
+            "The Qwen worker and separate PyTorch/TensorFlow encoder groups shared one "
+            "H200 GPU concurrently. Runtime measurements include resource contention; "
+            "they are execution costs for this schedule, not isolated backend-throughput "
+            "comparisons or direct speed comparisons with the earlier A100 run."
+        )
+    if config.get("bleurt_tf32") is False:
+        notes.append(
+            "TensorFlow TF32 is disabled for both BLEURT variants. SMART-BLEURT "
+            "uses the official length-batched scorer, removing padding only. "
+            "SMART-BERTScore retains unique sentence embeddings on the GPU and "
+            "uses upstream greedy cosine matching. All sentence comparisons are "
+            "retained; validation results are saved under execution/."
+        )
     if (run / "derivation.json").exists():
         notes.append(
             "This report derives NOVER from saved reference-likelihood statistics without new model inference. "

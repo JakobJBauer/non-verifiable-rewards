@@ -11,6 +11,9 @@ class BLEURTReward:
 
     ``checkpoint`` is the extracted checkpoint directory, e.g. BLEURT-20.
     An explicit checkpoint prevents accidentally using the bundled test model.
+    ``length_batching`` uses the official length-batched scorer when supported
+    by the checkpoint. It removes padding only, with normal floating-point
+    differences from batching; static checkpoints retain fixed padding.
     """
 
     def __init__(
@@ -19,6 +22,7 @@ class BLEURTReward:
         *,
         batch_size: int = 16,
         allow_truncation: bool = False,
+        length_batching: bool = False,
     ) -> None:
         positive_int(batch_size, "batch_size")
         self.checkpoint = fspath(checkpoint)
@@ -26,6 +30,7 @@ class BLEURTReward:
             raise ValueError("Provide the path to an extracted BLEURT checkpoint")
         self.batch_size = batch_size
         self.allow_truncation = allow_truncation
+        self.length_batching = length_batching
         self._scorer = None
 
     def _load_scorer(self):
@@ -36,7 +41,17 @@ class BLEURTReward:
                 raise ImportError(
                     "Install BLEURT with: uv sync --extra bleurt"
                 ) from exc
-            self._scorer = BleurtScorer(self.checkpoint)
+            scorer_class = BleurtScorer
+            if self.length_batching:
+                from bleurt.checkpoint import read_bleurt_config
+                from bleurt.score import LengthBatchingBleurtScorer
+
+                # Static checkpoints (including the bundled test model) keep
+                # fixed padding. Dynamic checkpoints can use the official
+                # scorer that strips padding and restores original pair order.
+                if read_bleurt_config(self.checkpoint).get("dynamic_seq_length", False):
+                    scorer_class = LengthBatchingBleurtScorer
+            self._scorer = scorer_class(self.checkpoint)
         return self._scorer
 
     def score(
@@ -54,9 +69,12 @@ class BLEURTReward:
         self._load_scorer()
         tokenizer = self._scorer.tokenizer
         limit = self._scorer.max_seq_length
+        lengths = {
+            text: len(tokenizer.tokenize(text))
+            for text in dict.fromkeys(candidates + references)
+        }
         too_long = any(
-            len(tokenizer.tokenize(reference)) + len(tokenizer.tokenize(candidate)) + 3
-            > limit
+            lengths[reference] + lengths[candidate] + 3 > limit
             for candidate, reference in zip(candidates, references, strict=True)
         )
         check_truncation(

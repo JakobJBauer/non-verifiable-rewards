@@ -201,6 +201,29 @@ def test_real_bertscore_overlength_sentence_and_single_sentence_equivalence(
     )
 
 
+@pytest.mark.parametrize("batch_size", [1, 2, 5, 64])
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_device_cached_bertscore_matches_upstream_with_repeated_unequal_inputs(
+    tiny_smart_bert, batch_size, device,
+):
+    torch = pytest.importorskip("torch")
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+    metric = tiny_smart_bert.metric
+    metric._options["device"] = device
+    metric.batch_size = batch_size
+    candidates = ["the cat.", "dog", "the dog. the cat.", "", "the cat."] * 3
+    references = ["dog", "the cat. the dog.", "the cat.", "cat", "dog"] * 3
+    metric.cache_on_device = False
+    expected = metric.score(candidates, references=references)
+    metric.cache_on_device = True
+    actual = metric.score(candidates, references=references)
+    assert actual == pytest.approx(expected, abs=1e-6)
+    # Upstream normalizes in-place. Repeated occurrences and later calls must
+    # never mutate shared embeddings or accumulate normalization error.
+    assert metric.score(candidates, references=references) == pytest.approx(expected, abs=1e-6)
+
+
 def test_real_bleurt_bundled_checkpoint_long_text():
     bleurt = pytest.importorskip("bleurt")
     reward = SMART1BLEURTReward(

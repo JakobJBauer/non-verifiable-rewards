@@ -92,6 +92,9 @@ class Backend:
         elif name in ("bleurt", "smart1_bleurt"):
             import tensorflow as tf
 
+            tf.config.experimental.enable_tensor_float_32_execution(
+                config.get("bleurt_tf32", True)
+            )
             if config["device"] == "cpu":
                 tf.config.set_visible_devices([], "GPU")
             else:
