@@ -12,15 +12,17 @@ from .analysis import export_table, preference_credit, vrcli_variant
 from .io import run_datasets
 
 
-def supplementary(run_dir, pilot_dir):
-    run, pilot = Path(run_dir), Path(pilot_dir)
+def supplementary(run_dir, pilot_dir=None):
+    run = Path(run_dir)
     config = json.loads((run / "config.json").read_text())
     margins = pd.read_parquet(run / "tables" / "pair_margins.parquet")
     scores = pd.read_parquet(run / "tables" / "candidate_scores.parquet")
     bootstrap = pd.read_parquet(run / "tables" / "bootstrap_accuracy.parquet")
     summary = pd.read_parquet(run / "tables" / "summary.parquet")
-    pilot_margins = pd.read_parquet(pilot / "tables" / "pair_margins.parquet")
-    pilot_summary = pd.read_parquet(pilot / "tables" / "summary.parquet")
+    if pilot_dir is not None:
+        pilot = Path(pilot_dir)
+        pilot_margins = pd.read_parquet(pilot / "tables" / "pair_margins.parquet")
+        pilot_summary = pd.read_parquet(pilot / "tables" / "summary.parquet")
     rewards = list(summary.reward.unique())
     variant = vrcli_variant(scores)
     comparisons, overlaps, truncation, weighting, information_loss = [], [], [], [], []
@@ -60,11 +62,14 @@ def supplementary(run_dir, pilot_dir):
                 }
             )
 
-        old = pilot_margins[pilot_margins.dataset == dataset].set_index("pair_id")
-        shared = old.index.intersection(frame.index)
-        if len(shared) != len(old):
+        old = (
+            pilot_margins[pilot_margins.dataset == dataset].set_index("pair_id")
+            if pilot_dir is not None else None
+        )
+        shared = old.index.intersection(frame.index) if old is not None else []
+        if old is not None and len(shared) != len(old):
             raise ValueError("The new run must include every reported pilot pair")
-        for reward in pilot_summary.reward.unique():
+        for reward in pilot_summary.reward.unique() if pilot_dir is not None else ():
             old_credit = old.loc[shared, reward + "_credit"]
             new_credit = frame.loc[shared, reward + "_credit"]
             if reward in ("rouge_l", "length") and not np.allclose(
@@ -179,6 +184,6 @@ def supplementary(run_dir, pilot_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", required=True)
-    parser.add_argument("--pilot-dir", default="outputs/local_cpu_int8")
+    parser.add_argument("--pilot-dir", help="Optional earlier pilot whose pairs are all included in this run")
     args = parser.parse_args()
     supplementary(args.run_dir, args.pilot_dir)

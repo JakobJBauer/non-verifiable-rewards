@@ -1638,6 +1638,7 @@ dependencies = [
 
 [package.optional-dependencies]
 benchmark = [
+    { name = "jinja2" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "scipy" },
@@ -1667,6 +1668,7 @@ requires-dist = [
     { name = "bert-score", marker = "extra == 'bertscore'", specifier = ">=0.3.13,<0.4" },
     { name = "bleurt", marker = "extra == 'bleurt'", git = "https://github.com/google-research/bleurt.git?rev=cebe7e6f996b40910cfaa520a63db47807e3bf5c" },
     { name = "datasets", specifier = ">=5.2.0" },
+    { name = "jinja2", marker = "extra == 'benchmark'", specifier = ">=3.1" },
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.9" },
     { name = "nltk", specifier = ">=3.9,<4" },
     { name = "pandas", marker = "extra == 'benchmark'", specifier = ">=2.2" },

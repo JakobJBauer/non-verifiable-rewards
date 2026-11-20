@@ -601,6 +601,22 @@ def test_analysis_rejects_overlapping_shards(synthetic_run):
         load_results(synthetic_run["run_dir"])
 
 
+def test_supplementary_without_a_nested_pilot(synthetic_run):
+    from non_verifiable_rewards.experiments.supplementary import supplementary
+
+    run = Path(synthetic_run["run_dir"])
+    write_json(run / "config.json", synthetic_run)
+    analyze(synthetic_run)
+    supplementary(run)
+    import pandas as pd
+
+    comparisons = pd.read_parquet(run / "tables" / "all_paired_comparisons.parquet")
+    assert len(comparisons) == len(DATASETS) * len(REWARDS) * (len(REWARDS) - 1) // 2
+    assert (run / "tables" / "prompt_weighting_sensitivity.parquet").exists()
+    assert (run / "tables" / "encoder_truncation_diagnostics.parquet").exists()
+    assert not (run / "tables" / "pilot_overlap.parquet").exists()
+
+
 def test_analysis_rejects_incomplete_runs(synthetic_run):
     path = (
         Path(synthetic_run["run_dir"])

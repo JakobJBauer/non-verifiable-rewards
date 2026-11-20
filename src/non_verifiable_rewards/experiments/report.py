@@ -567,11 +567,24 @@ def write_reports(result, config):
         "Each reward scores both members of the same pair. A higher human-preferred score earns 1, a lower score earns 0, and a tie earns 0.5.",
         "Accuracy uses pairs completed by every reward included in the primary benchmark. The 95% percentile bootstrap intervals resample prompts, preserving dependent pairs and paired differences versus length. Intervals are exploratory and not adjusted for multiple comparisons.",
         "Reddit references are original human TL;DRs joined by post ID with matching post text. Pairs containing the reference itself are excluded. LitBench references are the highest-upvote distinct story outside the pair; maximum observed upvotes resolve varying scraped counts.",
-        "The length baseline counts full-output words. ROUGE-L uses full texts. Neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. Human preferences refer to the full original outputs.",
+        "The length baseline, ROUGE-L, chrF++, METEOR and SMART use full original texts. Other neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. SMART segments long texts to cover their full content. Human preferences refer to the full original outputs.",
         limits,
         "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. LM scores use a fixed checkpoint; this run does not train a policy.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
     ]
+    manifest_path = run / "data_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        if all(manifest[name].get("split") == "test" for name in result["datasets"]):
+            notes.append(
+                "Pairs are sampled from the task loaders' test partitions using the saved seed. "
+                "Reddit uses SFF valid2 posts; LitBench uses our reproducible prompt-disjoint "
+                "20% holdout of LitBench-Train, not its official text-free test release; "
+                "WMT14 uses the human-ranked newstest2014 translations. The historical "
+                "November 13 report used different Reddit/LitBench sampling pools and older "
+                "likelihood prompts, so changes in its aggregate accuracies are not controlled "
+                "estimates of the effect of any single implementation change."
+            )
     if "wmt14_de_en" in result["datasets"]:
         notes.append(
             "WMT14 German-to-English pairs use official newstest2014 English references "
@@ -619,6 +632,24 @@ def write_reports(result, config):
             "The tokenizer is nltk.word_tokenize(preserve_line=True); scores are per text pair on a 0–1 scale. "
             "This is NLTK METEOR, not the Java release with paraphrase tables. "
             "WordNet checksums are recorded in models.json, and NLTK/WordNet versions in each score."
+        )
+    if "llm_judge" in result["rewards"]:
+        notes.append(
+            "The LLM judge shares the fixed Qwen checkpoint and independently rates each "
+            "candidate with a task-specific reference-aware quality rubric. It never sees "
+            "preference labels or the competing candidate. Its score is the expected 0–4 "
+            "rating, divided by four, using next-token probabilities renormalized over the "
+            "five digits with thinking disabled. The rubric, rating probabilities and total "
+            "valid-rating probability mass are recorded per score. It is a model judgment, "
+            "not a calibrated probability of human preference."
+        )
+    if any(reward.startswith("smart1_") for reward in result["rewards"]):
+        notes.append(
+            "The SMART-1 variants match candidate and reference sentence segments using "
+            "BERTScore or BLEURT, take directional best-match averages, and combine them "
+            "with the published harmonic mean. They cover complete texts without encoder "
+            "truncation. BLEURT can yield nonpositive components; diagnostic flags are "
+            "retained and its raw harmonic mean is not silently clipped."
         )
     if (run / "derivation.json").exists():
         notes.append(

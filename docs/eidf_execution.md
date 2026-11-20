@@ -63,7 +63,7 @@ and dependency files that may not yet be pushed to GitHub:
 
 ```bash
 ssh -x -o BatchMode=yes eidf-dev 'mkdir -p /root/non-verifiable-rewards'
-rsync -az --exclude='.venv' --exclude='artifacts' --exclude='outputs' \
+rsync -az --no-owner --no-group --exclude='.venv' --exclude='artifacts' --exclude='outputs' \
   --exclude='__pycache__' --exclude='.pytest_cache' --exclude='.ruff_cache' \
   -e 'ssh -x -o BatchMode=yes' ./ eidf-dev:/root/non-verifiable-rewards/
 ```
@@ -72,6 +72,8 @@ This includes Git history and current uncommitted source files, while keeping
 local environments and downloaded assets off the transfer. It does not delete
 existing remote files. Alternatively, clone the repository on the VM after
 the updated scripts and dependency files have been pushed.
+The ownership flags keep the root-run remote checkout owned by root, avoiding
+Git's dubious-ownership rejection when the local user has a different UID.
 
 Then run setup (as root, as provided by this SSH target):
 

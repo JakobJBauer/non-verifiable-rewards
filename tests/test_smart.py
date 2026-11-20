@@ -211,7 +211,8 @@ def test_real_bleurt_bundled_checkpoint_long_text():
     text = "The cat sat. " * 3
     expected = reward.metric.score(["The cat sat."], references=["The cat sat."])[0]
     # All nine matrix entries are identical: the aggregate equals that score.
-    assert reward.score([text], references=[text]) == pytest.approx([expected])
+    # GPU TF32 kernels can vary slightly between singleton and two-pair batches.
+    assert reward.score([text], references=[text]) == pytest.approx([expected], abs=1e-4)
     long = "cat " * 300
     result = reward.score_with_details([long], references=[long])[0]
     assert math.isfinite(result["f1"])
