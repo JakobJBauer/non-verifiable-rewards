@@ -321,7 +321,7 @@ def analyze(config):
                     **pair,
                     "margins": margins.iloc[index].to_dict(),
                     "credits": dict(zip(rewards, credits[index].tolist(), strict=True)),
-                    "selection": "Most evenly split correct/incorrect neural+ROUGE decisions; pair ID breaks ties",
+                    "selection": "Most evenly split correct/incorrect non-length reward decisions; pair ID breaks ties",
                 }
             )
     summary = pd.DataFrame(summary_rows)

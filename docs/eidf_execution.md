@@ -4,6 +4,14 @@ The full experiment uses 2,000 pairs per dataset, Qwen3-4B in bfloat16,
 RoBERTa-large BERTScore, and BLEURT-20. It performs inference only. The local
 128-pair pilot remains at Git tag `cpu-pilot-128-pairs`.
 
+The [20 November 2026 comparison](reward_comparison_20261120.md) completed
+TL;DR, LitBench and WMT14 with twelve metrics on 2,000 pairs per dataset and
+only SMART-BLEURT on 100. Start with the
+[HTML report](../outputs/eidf_qwen3_4b_all_rewards_20261120/report.html) or
+[interpretation](../outputs/eidf_qwen3_4b_all_rewards_20261120/analysis.md).
+The report also includes a matched comparison of all thirteen metrics on the
+same 100 pairs. All requested scores passed the completion audit.
+
 The 13 November 2026 run completed all 56,000 candidate scores without errors
 on one NVIDIA A100-SXM4-40GB. Scoring and initial reporting took 33 minutes
 46 seconds, excluding setup and downloads. The local mirror is

@@ -91,7 +91,7 @@ def accuracy_figures(result, config):
         fig.suptitle(
             "Improvement over the length baseline"
             if delta
-            else "Agreement with human preferences",
+            else "Agreement with preference labels",
             fontsize=17,
             fontweight="bold",
         )
@@ -589,10 +589,10 @@ def write_reports(result, config):
     limits = f"Prompt ≤ {config['max_prompt_tokens']} Qwen tokens; candidate ≤ {config['max_candidate_tokens']}; reference ≤ {config['max_reference_tokens']} (zero means unlimited)."
     notes = [
         "This is an offline preference comparison. There is no training or output generation.",
-        "Each reward scores both members of the same pair. A higher human-preferred score earns 1, a lower score earns 0, and a tie earns 0.5.",
+        "Each reward scores both members of the same pair. A higher score for the dataset-preferred candidate earns 1, a lower score earns 0, and a tie earns 0.5.",
         "Accuracy uses pairs completed by every reward included in the primary benchmark. The 95% percentile bootstrap intervals resample prompts, preserving dependent pairs and paired differences versus length. Intervals are exploratory and not adjusted for multiple comparisons.",
-        "Reddit references are original human TL;DRs joined by post ID with matching post text. Pairs containing the reference itself are excluded. LitBench references are the highest-upvote distinct story outside the pair; maximum observed upvotes resolve varying scraped counts.",
-        "The length baseline, ROUGE-L, chrF++, METEOR and SMART use full original texts. Other neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. SMART segments long texts to cover their full content. Human preferences refer to the full original outputs.",
+        "Reddit references are original human TL;DRs joined by post ID with matching post text. Pairs containing the reference itself are excluded. LitBench references are the highest-upvote distinct story outside the pair; maximum observed upvotes resolve varying scraped counts. LitBench labels are upvote-derived preference proxies, not fresh pairwise human judgments; its third-story references are not canonical correct answers.",
+        "The length baseline, ROUGE-L, chrF++, METEOR and SMART use full original texts. Other neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. SMART segments long texts to cover their full content. Preference labels refer to the full original outputs.",
         limits,
         "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. LM scores use a fixed checkpoint; this run does not train a policy.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
@@ -771,6 +771,8 @@ def write_reports(result, config):
     markdown = f"# {config['name']}\n\n{model_description}\n\n" + "\n".join(
         "- " + note for note in notes
     )
+    if (run / "analysis.md").exists():
+        markdown += "\n\n[Interpretation and limitations](analysis.md)\n"
     markdown += (
         "\n\n## Results\n\n"
         + markdown_table(display)
@@ -840,6 +842,8 @@ def write_reports(result, config):
         + "".join("<li>" + html.escape(note) + "</li>" for note in notes)
         + "</ul></details>"
     )
+    if (run / "analysis.md").exists():
+        document += '<p><a href="analysis.md">Interpretation and limitations</a></p>'
     document += (
         "<section><h2>Results</h2><p>Preference accuracy with 95% prompt-bootstrap intervals.</p><div class='scroll'>"
         + comparison_table(result["summary"]).to_html(index=False, border=0, escape=True)
