@@ -3,13 +3,19 @@
 This report describes the current source and the completed 13 November 2026
 Qwen3-4B experiment. The completed run used thresholded VR-CLI with generic
 conditioning; current scoring returns continuous perplexity improvement with
-task-specific summary/story prompts. The scoring-source hash therefore
+task-specific summary/story prompts shared by reference likelihood and NOVER.
+The scoring-source hash therefore
 differs from the recorded GPU workers, and saved results remain historical.
 
-The project evaluates **six rewards plus a length baseline** on pre-existing
+The current project evaluates **seven rewards plus a length baseline**, including
+the NOVER proxy added after that run, on pre-existing
 preference pairs. It performs inference, comparison, and statistical analysis.
 There is no policy training, optimizer, GRPO implementation, generated rollout
 collection, LLM judge, or self-play in the current experiment.
+
+The [NOVER assessment](nover.md) documents its formula, source-code audit,
+completed-candidate adaptation, and separate comparison derived from the frozen
+GPU likelihoods. The original seven-method results below remain historical.
 
 **The implemented intrinsic reward is self-certainty, not self-consistency.**
 Self-certainty examines a model's next-token distributions along one supplied
@@ -370,12 +376,23 @@ and [`experiments/runner.py`](../src/non_verifiable_rewards/experiments/runner.p
 
 ### Conditioning and raw likelihood
 
-The generic reference-likelihood benchmark constructs a user message containing the source prompt followed
-by the literal text:
+Reference likelihood, VR-CLI, and NOVER use one shared prompt builder in
+[`rewards/prompts.py`](../src/non_verifiable_rewards/rewards/prompts.py).
+`task_for_dataset` chooses summary instructions for Reddit and story instructions
+for LitBench. `make_reference_context` selects plain-text or chat serialization
+for both the standalone reward APIs and the experiment worker. For summaries,
+the user message is:
 
 ```text
-Use this candidate response as context:
+Write an accurate, concise summary of the source text below.
+
+Source text:
+{prompt}
+
+Here is an example summary of the same source text:
 {candidate}
+
+Now write a summary of the source text:
 ```
 
 It passes that message to Qwen's tokenizer with:
@@ -415,7 +432,7 @@ inference configuration.
 
 ### VR-CLI baseline and continuous transformation
 
-VR-CLI uses its own task-specific user message, `C_task(x,y)`. Reddit requests
+All three reference-likelihood rewards share `C_task(x,y) = C(x,y)`. Reddit requests
 an accurate, concise summary of the source text, presents the candidate as an
 example summary, and asks for a summary of that source. LitBench requests a
 standalone story for the writing prompt and presents the candidate as an
@@ -459,43 +476,48 @@ Current `VRCLIReward` no longer accepts `thresholds` or `levels`. It is an
 explicit unthresholded adaptation of the paper's reward.
 
 Within a pair, both candidates share `L_0`, so continuous VR-CLI is strictly
-increasing in their raw likelihoods **under its own task-specific prompt**.
-It can disagree with the generic reference-likelihood benchmark because that
-method uses different conditioning. The supplementary monotonicity check uses
-VR-CLI's own conditioned likelihoods; agreement with generic likelihood is a
-separate diagnostic. Floating-point precision and absolute tie tolerances can
-still create ties. No preference-accuracy improvement is assumed from wording
-alone, especially for LitBench's independent-story reference proxy.
+increasing in their raw likelihoods. The reference-likelihood benchmark now
+uses exactly the same task prompts and model evaluations, restoring identical
+mathematical pairwise ordering. NOVER can change this ordering through its
+candidate-length normalization. The supplementary monotonicity check uses
+VR-CLI's saved conditioned likelihoods so older runs with separate prompts
+remain interpretable. Floating-point precision and absolute tie tolerances
+can still create ties. No accuracy improvement is assumed from wording alone,
+especially for LitBench's independent-story reference proxy.
 
 Removing thresholds from the frozen run's generic-prompt likelihoods gives
 44.25% accuracy on Reddit and 49.90% on LitBench with no ties. Those results
 do not evaluate the new prompts, which require new model inference. Original
 journals and reports retain the old results.
 
-New worker statistics record `vr_cli_variant = "continuous_task_specific"`;
-`"continuous"` denotes the earlier generic-prompt version. Analysis treats
-unmarked historical scores as thresholded and rejects mixed or unknown variants.
+New likelihood-derived statistics record `reference_prompt_template = "task_specific_v1"`.
+VR-CLI also records `vr_cli_variant = "continuous_task_specific"`;
+`"continuous"` denotes its earlier generic-prompt version. Unmarked reference
+likelihood used generic prompts, while unmarked VR-CLI used thresholds. Analysis
+rejects mixed or unknown variants/templates and reports distinguish the older
+configuration where only VR-CLI used task instructions.
 Reports identify the variant and show improvement distributions and pairwise
 margins. A new scoring run needs a separate run directory; the worker identity
 check prevents resuming old shards with changed scoring code.
 
 ### Shared computation and caching
 
-The LM worker calls one `CausalLMScorer` for all three LM rewards. VR-CLI's
-task-specific likelihood evaluations are separate from generic reference
-likelihood; `VRCLIReward.score_from_log_likelihoods` transforms those new
-values. Each reward's statistics record its own conditioning and token counts.
+The LM worker calls one `CausalLMScorer` for all four LM rewards. The NOVER
+proxy reuses the shared task-conditioned reference likelihood and divides its mean by
+`1 + log10(candidate_tokens)`; see the [NOVER assessment](nover.md).
+`VRCLIReward.score_from_log_likelihoods` transforms the very same conditioned
+values. All three rewards record the shared likelihood and conditioning-token
+statistics; VR-CLI adds its baseline, and NOVER adds the length normalizer.
 
 For one pair, at the configured LM batch size of one, the work is normally:
 
 1. One reference-under-task-prompt sequence, unless its baseline is cached.
-2. Two reference-under-generic-prompt-and-candidate sequences for reference likelihood.
-3. Two reference-under-task-prompt-and-example sequences for VR-CLI.
-4. Two candidate-under-generic-prompt sequences for self-certainty.
+2. Two reference-under-task-prompt-and-example sequences shared by reference likelihood, VR-CLI, and NOVER.
+3. Two candidate-under-original-prompt sequences for self-certainty.
 
-The task-specific variant adds two conditioned sequence evaluations per pair
-compared with the earlier shared-prompt implementation; the arithmetic
-transformation adds no model call. Baselines are persisted
+Sharing the conditioned evaluations removes the two extra sequences used when
+only VR-CLI had task-specific prompts. The arithmetic transformations add no
+model calls. Baselines are persisted
 per worker shard and keyed by a digest of the exact no-candidate context and
 reference text. Worker identity checks bind that cache to the run's model and
 scoring settings. The GPU run saved 3,227 unique baseline evaluations across
@@ -668,7 +690,7 @@ their accuracy difference is not a causal estimate of truncation's effect.
 ## 12. Worker execution, resuming, and provenance
 
 There are four worker backends: `lexical` produces ROUGE-L and length;
-`bertscore` and `bleurt` each produce one reward; `lm` produces all three Qwen
+`bertscore` and `bleurt` each produce one reward; `lm` produces all four Qwen
 rewards. Models are loaded only when a worker finds pending pairs and are
 reused across both datasets.
 
@@ -764,14 +786,15 @@ The local results mirror is `outputs/eidf_qwen3_4b/`.
 
 The pipeline saves scalar scores and aggregate LM statistics, not every token's
 logits, embedding, or probability distribution. Per-position analyses would
-require further inference. LM diagnostic fields are attached to rows for all
-three LM rewards for convenience; their presence on a self-certainty row does
+require further inference. In the original GPU run, LM diagnostic fields were
+attached to rows for all three then-implemented LM rewards for convenience;
+their presence on a self-certainty row does
 not mean the reference was used to compute that score.
 
 Pair timing starts after model loading and ends before the pair's journal
 append, while worker wall time includes loading and output overhead. Runtime
-tables combine the three LM rewards in one backend; their shared computation
-must not be counted three times. In the original run, the full pipeline took
+tables combine the LM rewards in one backend; their shared computation
+must not be counted once per reward. In the original run, the full pipeline took
 33 minutes 46 seconds excluding setup/downloads; the LM worker took 23.25
 minutes and peaked at 8.77 GiB of PyTorch-allocated GPU memory.
 

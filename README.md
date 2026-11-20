@@ -11,6 +11,8 @@ The [likelihood-method audit](docs/methodology_audit.md) checks formulas against
 the papers and authors' code, traces every selected reference to its source,
 and explains why the completed-candidate adaptations are not paper replications
 or an implementation of RLPR's mean-probability reward.
+The [NOVER assessment](docs/nover.md) describes the newly added continuous proxy,
+its distinction from NOVER's full RL reward, and the eight-metric comparison.
 
 Dataset loaders live in `src/non_verifiable_rewards/data` and are imported with:
 
@@ -46,6 +48,13 @@ The persistent copy is
 [Execution and recovery instructions](docs/eidf_execution.md) describe the
 saved source, dependencies, and model cache. The CPU pilot remains unchanged
 at Git tag `cpu-pilot-128-pairs`.
+
+NOVER's proxy has also been evaluated on these same pairs by reusing the saved
+reference likelihoods and candidate token counts. It reaches **48.75% on Reddit
+and 50.75% on LitBench**, with strong length dependence. The separate
+[eight-metric report](outputs/nover_qwen3_4b_20261119/report.html) includes
+correlations, paired uncertainty, and length diagnostics. Original GPU scores
+remain unchanged; the [assessment](docs/nover.md) explains the interpretation.
 
 ## Run the experiments
 
@@ -119,7 +128,7 @@ vote ties are broken by content hash. These decisions are recorded in each pair.
 | `scores/*/*.invocation-*.json`, `logs/` | Every worker invocation, package versions, peak memory, progress, and failures |
 | `source_at_*.tar.gz`, `artifacts.json` | Source snapshots and output checksums |
 
-All seven scores are higher-is-better. Accuracy assigns 1 to a correct preference,
+All eight current scores are higher-is-better. Accuracy assigns 1 to a correct preference,
 0 to an incorrect preference, and 0.5 to a tie. The report uses the common complete
 pair set for methods included in the benchmark, reports coverage and ties, and obtains paired 95% percentile intervals
 by resampling prompts. Correlations use score margins within each pair; raw score
@@ -184,7 +193,7 @@ the Python code itself.
 ```bash
 uv sync                         # Dataset utilities, ROUGE-L, length, and tests
 uv sync --extra bertscore       # BERTScore encoder
-uv sync --extra lm              # Self-certainty and both likelihood rewards
+uv sync --extra lm              # Self-certainty, reference likelihood, VR-CLI, NOVER proxy
 uv sync --extra bleurt          # Official BLEURT TensorFlow implementation
 uv sync --all-extras            # All rewards
 ```
@@ -196,7 +205,7 @@ Choose the appropriate PyTorch build for your CPU/CUDA environment.
 
 Importing reward modules does not load PyTorch, TensorFlow, Transformers, or any
 model weights. BERTScore and BLEURT load on their first nonempty scoring call.
-The causal LM is loaded explicitly and can be shared by all three LM rewards.
+The causal LM is loaded explicitly and can be shared by all four LM rewards.
 
 For long texts, the two [SMART-1 rewards](docs/smart_rewards.md) aggregate sentence
 matches without truncating the text. Enable them in experiments with
@@ -227,6 +236,7 @@ lengths, and empty references raise errors.
 | `SelfCertaintyReward` / `self_certainty.py` | Mean KL(uniform \|\| next-token distribution) | prompts |
 | `ReferenceLikelihoodReward` / `reference_likelihood.py` | log p(reference \| prompt, candidate) | prompts, references |
 | `VRCLIReward` / `vr_cli.py` | Continuous percent improvement in reference perplexity | prompts, references |
+| `NOVERReward` / `nover.py` | NOVER proxy: mean reference log probability / (1 + log10(candidate tokens)) | prompts, references |
 | `LengthReward` / `length.py` | Word count; optionally character count | none |
 
 For example, score both sides of a comparison against the **same independently
@@ -257,9 +267,9 @@ pairs; raw likelihoods also vary with reference length and prompt difficulty.
 
 ```python
 from non_verifiable_rewards.rewards import (
-    CausalLMScorer, ReferenceLikelihoodReward, SelfCertaintyReward, VRCLIReward,
+    CausalLMScorer, NOVERReward, ReferenceLikelihoodReward, SelfCertaintyReward, VRCLIReward,
 )
-from non_verifiable_rewards.rewards.vr_cli import vr_cli_context
+from non_verifiable_rewards.rewards.prompts import chat_context, make_reference_context
 
 lm = CausalLMScorer.from_pretrained(
     "Qwen/Qwen3-4B",
@@ -267,47 +277,57 @@ lm = CausalLMScorer.from_pretrained(
     batch_size=1,
 )
 
-# Use the model's chat template, with Qwen3 thinking disabled. Record this
-# template and the model/tokenizer revisions with your experiment results.
-def reference_context(prompt: str, candidate: str | None) -> str:
-    content = prompt
-    if candidate:
-        content += "\n\nUse this candidate response as context:\n" + candidate
-    return lm.tokenizer.apply_chat_template(
-        [{"role": "user", "content": content}],
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False,
-    )
-
-def summary_context(prompt: str, candidate: str | None) -> str:
-    return lm.tokenizer.apply_chat_template(
-        [{"role": "user", "content": vr_cli_context(
-            prompt, candidate, task="summarization"
-        )}],
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False,
-    )
-
-likelihood = ReferenceLikelihoodReward(lm, context_builder=reference_context)
-vr_cli = VRCLIReward(lm, context_builder=summary_context)
+# One shared task template and chat serialization, with Qwen thinking disabled.
+# Use task="story_generation" for LitBench.
+reference_context = make_reference_context(
+    task="summarization", tokenizer=lm.tokenizer
+)
+likelihood = ReferenceLikelihoodReward(
+    lm, reduction="mean", context_builder=reference_context
+)
+nover = NOVERReward(lm, context_builder=reference_context)
+vr_cli = VRCLIReward(lm, context_builder=reference_context)
 certainty = SelfCertaintyReward(
-    lm, context_builder=lambda prompt: reference_context(prompt, None)
+    lm, context_builder=lambda prompt: chat_context(lm.tokenizer, prompt)
 )
 
 likelihood_scores = likelihood.score(**batch)
+nover_scores = nover.score(**batch)
 vr_cli_scores = vr_cli.score(**batch)
 certainty_scores = certainty.score(**batch)
 ```
 
-Without a custom context builder, reference likelihood uses a plain-text prompt,
-an optional `Candidate response:` section, and a `Response:` delimiter. VR-CLI
-uses a task-specific plain-text template: `task="summarization"` by default, or
-`task="story_generation"` for stories. Its builder receives `None` for the
-no-candidate baseline. Self-certainty's default context is the prompt followed
-by a newline. The reference remains the scored continuation; it is never
-interpolated into the conditioning prompt.
+The runner computes reference likelihood once under the shared task prompt and
+reuses it for both VR-CLI and NOVER. VR-CLI additionally scores the no-candidate
+baseline; NOVER requires no extra model inference. It uses the authors' **base-10** length
+normalizer, with the scored candidate's token count. The returned value is
+negative log normalized perplexity: higher is better, without exponentiation.
+This is a completed-candidate proxy; it does not implement NOVER's group ranks,
+format reward, efficiency bonus, or policy/proxy synchronization. At fixed
+reference likelihood it rewards longer candidates. See [NOVER details](docs/nover.md).
+
+To derive a separate report from an existing complete benchmark:
+
+```bash
+.venv/bin/python -m non_verifiable_rewards.experiments.nover \
+  --run-dir outputs/eidf_qwen3_4b \
+  --output-dir outputs/nover_qwen3_4b_20261119
+```
+
+Use a new output directory; the command refuses to overwrite one. Derived runs
+are for reporting only. They retain source checksums, scores, and inference
+timings, including the original VR-CLI variant. Fresh scoring includes NOVER
+automatically; historical reports retain their recorded reward set.
+
+Prompt construction lives in [`rewards/prompts.py`](src/non_verifiable_rewards/rewards/prompts.py):
+`reference_context` builds task content, `make_reference_context` optionally
+applies the chat template, and `task_for_dataset` maps Reddit/LitBench to tasks.
+Without a custom builder, reference likelihood, VR-CLI, and NOVER all use the
+same plain-text template: `task="summarization"` by default, or
+`task="story_generation"` for stories. Passing `None` as the candidate omits
+only the example block for the VR-CLI baseline. Self-certainty keeps its own
+original-prompt conditioning; its standalone default adds a newline. The
+reference remains the scored continuation and is never included in the user message.
 
 The benchmark selects summary instructions for Reddit and story instructions
 for LitBench, wrapped in Qwen's chat template. For summaries, the content is:
@@ -356,11 +376,11 @@ constructor arguments have been removed. Nonfinite improvements from extreme
 numeric overflow raise an error instead of creating a tied floor.
 
 For a pair sharing one baseline/reference, this transformation is strictly
-increasing in conditioned mean log probability **under the same prompt**.
-VR-CLI now uses different instructions from the generic reference-likelihood
-benchmark, so their rankings can differ. The worker runs separate conditioned
-likelihood evaluations and stores their statistics separately. Numerical
-precision and the configured tie tolerance still apply.
+increasing in conditioned mean log probability. Reference likelihood and VR-CLI
+now share identical task prompts, target tokens, and conditioned evaluations,
+so their mathematical pairwise rankings agree. Numerical precision and the
+configured tie tolerance still apply. NOVER uses the same likelihoods but can
+change rankings through its candidate-length normalization.
 
 With the former generic prompts, removing thresholds from the frozen
 2,000-pair scores per dataset removed all VR-CLI ties and yielded accuracies
@@ -370,9 +390,13 @@ fresh model inference and a paired comparison on a fixed evaluation set;
 choose wording on development data rather than tuning it to the test labels.
 
 The saved November 2026 runs and audits retain their original thresholded
-scores. New scores record `statistics.vr_cli_variant = "continuous_task_specific"`;
-`"continuous"` identifies the earlier generic-prompt variant. Reports identify
-unmarked historical scores as thresholded and reject mixed variants.
+scores. New likelihood-derived scores record
+`statistics.reference_prompt_template = "task_specific_v1"`, and VR-CLI also
+records `statistics.vr_cli_variant = "continuous_task_specific"`.
+Unmarked reference-likelihood scores used the historical generic template;
+`"continuous"` identifies generic-prompt VR-CLI, and unmarked VR-CLI scores
+used thresholds. Reports distinguish historical runs where only VR-CLI had
+task-specific instructions and reject mixtures of old/new reference templates.
 Use a new run directory when scoring with the new implementation.
 
 Baselines shared by pairs are computed once per scoring

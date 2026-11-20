@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ..rewards.prompts import REFERENCE_PROMPT_TEMPLATE
 from .io import ALL_REWARDS, BACKENDS, DATASETS, read_jsonl, run_rewards, write_jsonl
 
 
@@ -129,11 +130,29 @@ def vrcli_variant(scores):
     return variants.iloc[0]
 
 
+def reference_prompt_template(scores):
+    """Unmarked reference-likelihood scores used the historical generic prompt."""
+    rows = scores[(scores.reward == "reference_likelihood") & (scores.status == "ok")]
+    if rows.empty:
+        return None
+    templates = rows.get(
+        "statistics.reference_prompt_template", pd.Series("generic", index=rows.index)
+    ).fillna("generic")
+    if templates.nunique() != 1 or not templates.isin(
+        ("generic", REFERENCE_PROMPT_TEMPLATE)
+    ).all():
+        raise ValueError(
+            "Mixed or unknown reference prompt templates; use separate run directories"
+        )
+    return templates.iloc[0]
+
+
 def analyze(config):
     run = Path(config["run_dir"])
     rewards = report_rewards(config)
     scores, timings, originals = load_results(run, rewards)
     variant = vrcli_variant(scores)
+    prompt_template = reference_prompt_template(scores)
     scores["included_in_primary_benchmark"] = scores.reward.isin(rewards)
     export_table(scores, run / "tables" / "candidate_scores")
     export_table(timings, run / "tables" / "pair_timings")
@@ -354,6 +373,7 @@ def analyze(config):
     return {
         "rewards": rewards,
         "vr_cli_variant": variant,
+        "reference_prompt_template": prompt_template,
         "scores": scores,
         "summary": summary,
         "coverage": coverage,

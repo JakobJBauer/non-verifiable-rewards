@@ -14,6 +14,7 @@ from .io import (
     ensure_run,
     file_sha256,
     read_jsonl,
+    run_rewards,
     utc_now,
     write_json,
 )
@@ -50,11 +51,11 @@ def lm_mode(config):
     return scope.get("lm_mode", "smoke")
 
 
-def successful_pair(record):
+def successful_pair(record, rewards=BACKEND_REWARDS["lm"]):
     rows = record.get("rows", [])
     expected = {
         (reward, side)
-        for reward in BACKEND_REWARDS["lm"]
+        for reward in rewards
         for side in ("preferred", "rejected")
     }
     return (
@@ -72,10 +73,13 @@ def successful_pair(record):
 def smoke_check(config):
     """Reuse a successful saved pair before considering any new inference."""
     run = ensure_run(config)
+    rewards = tuple(
+        reward for reward in run_rewards(run) if reward in BACKEND_REWARDS["lm"]
+    )
     path = run / "qwen_smoke_check.json"
     if path.exists():
         saved = json.loads(path.read_text())
-        if not successful_pair(saved["validation"]):
+        if not successful_pair(saved["validation"], rewards):
             raise ValueError("Saved LM smoke check is incomplete or unsuccessful")
         return saved
 
@@ -87,7 +91,7 @@ def smoke_check(config):
     for name in DATASETS:
         for journal in sorted((run / "scores" / "lm").glob(f"{name}-shard-*.jsonl")):
             for record in read_jsonl(journal):
-                if successful_pair(record):
+                if successful_pair(record, rewards):
                     validation, selected = record, name
                     break
             if validation is not None:
@@ -101,6 +105,8 @@ def smoke_check(config):
         "preprocessing_sha256": file_sha256(run / "preprocessing.json"),
     }
     if validation is None:
+        if set(rewards) != set(BACKEND_REWARDS["lm"]):
+            raise ValueError("LM reward set changed; choose a new run_dir for scoring")
         selected = DATASETS[0]
         pair = read_jsonl(run / "scored_text" / f"{selected}.jsonl")[0]
         original = next(
@@ -126,7 +132,7 @@ def smoke_check(config):
         }
         if not successful_pair(validation):
             raise ValueError(
-                "LM smoke check did not produce six finite candidate scores"
+                "LM smoke check did not produce all expected finite candidate scores"
             )
 
     original = next(

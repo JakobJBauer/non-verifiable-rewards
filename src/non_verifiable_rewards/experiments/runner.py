@@ -14,12 +14,19 @@ from ..rewards import (
     BLEURTReward,
     CausalLMScorer,
     LengthReward,
+    NOVERReward,
     RougeLReward,
     SMART1BERTScoreReward,
     SMART1BLEURTReward,
     VRCLIReward,
 )
-from ..rewards.vr_cli import vr_cli_context
+from ..rewards.nover import nover_length_normalizer
+from ..rewards.prompts import (
+    REFERENCE_PROMPT_TEMPLATE,
+    chat_context,
+    make_reference_context,
+    task_for_dataset,
+)
 from .assets import model_paths
 from .io import (
     BACKEND_REWARDS,
@@ -49,31 +56,6 @@ def scoring_code_digest():
     ]
     return digest(
         {str(path.relative_to(package)): file_sha256(path) for path in sorted(paths)}
-    )
-
-
-def chat_context(tokenizer, prompt, candidate=None):
-    content = prompt
-    if candidate:
-        content += "\n\nUse this candidate response as context:\n" + candidate
-    return tokenizer.apply_chat_template(
-        [{"role": "user", "content": content}],
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False,
-    )
-
-
-def vrcli_chat_context(tokenizer, dataset, prompt, candidate=None):
-    tasks = {"reddit_tldr": "summarization", "litbench": "story_generation"}
-    if dataset not in tasks:
-        raise ValueError(f"No VR-CLI task prompt defined for dataset {dataset!r}")
-    content = vr_cli_context(prompt, candidate, task=tasks[dataset])
-    return tokenizer.apply_chat_template(
-        [{"role": "user", "content": content}],
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False,
     )
 
 
@@ -230,9 +212,10 @@ class Backend:
             details[self.name] = dict(zip(("preferred", "rejected"), results, strict=True))
         else:
             tokenizer = self.scorer.tokenizer
-            baseline_context = vrcli_chat_context(
-                tokenizer, pair["dataset"], pair["prompt"]
+            build_context = make_reference_context(
+                task=task_for_dataset(pair["dataset"]), tokenizer=tokenizer
             )
+            baseline_context = build_context(pair["prompt"], None)
             key = digest([baseline_context, pair["reference"]])
             start = time.perf_counter()
             cached = baseline_journal.completed.get(key)
@@ -253,7 +236,7 @@ class Backend:
                 timings["baseline_cache_hit"] = False
             timings["baseline_seconds"] = time.perf_counter() - start
             contexts = [
-                chat_context(tokenizer, pair["prompt"], candidate)
+                build_context(pair["prompt"], candidate)
                 for candidate in candidates
             ]
             start = time.perf_counter()
@@ -262,17 +245,15 @@ class Backend:
             )
             timings["conditioned_seconds"] = time.perf_counter() - start
             values["reference_likelihood"] = conditioned
-            vr_contexts = [
-                vrcli_chat_context(tokenizer, pair["dataset"], pair["prompt"], candidate)
+            candidate_counts = [
+                len(tokenizer.encode(candidate, add_special_tokens=False))
                 for candidate in candidates
             ]
-            start = time.perf_counter()
-            vr_conditioned = self.scorer.log_likelihood(
-                vr_contexts, references, reduction="mean"
+            values["nover"] = NOVERReward.score_from_log_likelihoods(
+                conditioned, candidate_counts
             )
-            timings["vr_cli_conditioned_seconds"] = time.perf_counter() - start
             values["vr_cli"] = self.vr_cli.score_from_log_likelihoods(
-                vr_conditioned, [baseline] * 2
+                conditioned, [baseline] * 2
             )
             start = time.perf_counter()
             certainty_context = chat_context(tokenizer, pair["prompt"])
@@ -285,10 +266,9 @@ class Backend:
             )
             details = {reward: {} for reward in values}
             for index, side in enumerate(("preferred", "rejected")):
-                candidate_tokens = len(
-                    tokenizer.encode(candidates[index], add_special_tokens=False)
-                )
+                candidate_tokens = candidate_counts[index]
                 details["reference_likelihood"][side] = {
+                    "reference_prompt_template": REFERENCE_PROMPT_TEMPLATE,
                     "conditioned_logp_mean": conditioned[index],
                     "conditioned_logp_sum": conditioned[index] * reference_tokens,
                     "reference_tokens": reference_tokens,
@@ -298,18 +278,19 @@ class Backend:
                     "candidate_tokens": candidate_tokens,
                 }
                 details["vr_cli"][side] = {
+                    **details["reference_likelihood"][side],
                     "vr_cli_variant": self.vr_cli.variant,
-                    "conditioned_logp_mean": vr_conditioned[index],
                     "baseline_logp_mean": baseline,
-                    "conditioned_logp_sum": vr_conditioned[index] * reference_tokens,
                     "baseline_logp_sum": baseline * reference_tokens,
-                    "reference_tokens": reference_tokens,
                     "perplexity_improvement_percent": values["vr_cli"][index],
                     "improvement_overflow": False,
-                    "conditioning_tokens": len(
-                        tokenizer.encode(vr_contexts[index], add_special_tokens=False)
-                    ),
-                    "candidate_tokens": candidate_tokens,
+                }
+                details["nover"][side] = {
+                    **details["reference_likelihood"][side],
+                    "nover_variant": NOVERReward.variant,
+                    "length_normalizer": nover_length_normalizer(candidate_tokens),
+                    "length_log_base": 10,
+                    "source_reward": "reference_likelihood",
                 }
                 details["self_certainty"][side] = {
                     "conditioning_tokens": len(
@@ -396,6 +377,8 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
     run = ensure_run(config)
     if backend in SMART_REWARDS and backend not in run_rewards(run):
         raise ValueError("SMART reward set changed; choose a new run_dir for scoring")
+    if backend == "lm" and set(BACKEND_REWARDS["lm"]) - set(run_rewards(run)):
+        raise ValueError("LM reward set changed; choose a new run_dir for scoring")
     models = model_paths(config)
     data_manifest = json.loads((run / "data_manifest.json").read_text())
     preprocessing = json.loads((run / "preprocessing.json").read_text())

@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 
+from ..rewards.prompts import REFERENCE_PROMPT_TEMPLATE
 from .analysis import analyze
 from .io import DATASETS, REWARDS, code_files, file_sha256, utc_now, write_json
 
@@ -27,13 +28,17 @@ LABELS = {
     "self_certainty": "Self-certainty",
     "reference_likelihood": "Reference likelihood",
     "vr_cli": "VR-CLI",
+    "nover": "NOVER proxy",
     "length": "Length baseline",
 }
 DATASET_LABELS = {"reddit_tldr": "Reddit TL;DR", "litbench": "LitBench"}
 COLORS = dict(
     zip(
         REWARDS,
-        ("#4477AA", "#228833", "#AA3377", "#AA8800", "#EE7733", "#0099BB", "#777777"),
+        (
+            "#4477AA", "#228833", "#AA3377", "#AA8800",
+            "#EE7733", "#0099BB", "#8855AA", "#777777",
+        ),
         strict=True,
     )
 )
@@ -346,15 +351,18 @@ def smoke_figure(config):
         return
     smoke = json.loads(path.read_text())
     rows = smoke["validation"]["rows"]
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.8))
+    rewards = [
+        reward
+        for reward in ("reference_likelihood", "self_certainty", "vr_cli", "nover")
+        if any(row["reward"] == reward for row in rows)
+    ]
+    fig, axes = plt.subplots(1, len(rewards), figsize=(4.3 * len(rewards), 4.8))
     fig.suptitle(
         f"Qwen smoke check · one {DATASET_LABELS[smoke['validation']['dataset']]} pair · not an accuracy estimate",
         fontsize=15,
         fontweight="bold",
     )
-    for ax, reward in zip(
-        axes, ("reference_likelihood", "self_certainty", "vr_cli"), strict=True
-    ):
+    for ax, reward in zip(axes, rewards, strict=True):
         values = [
             next(
                 row["score"]
@@ -378,12 +386,14 @@ def smoke_figure(config):
         ax.set_ylabel("Reward value (higher is better)")
         ax.grid(axis="y", alpha=0.2)
         ax.margins(y=0.22)
-        if reward == "reference_likelihood":
+        if reward in ("reference_likelihood", "nover"):
             ax.set_ylim(min(values) - 0.12, max(values) + 0.12)
             ax.text(
                 0.02,
                 0.97,
-                "Mean token log probability\nAxis zoomed to show difference",
+                "Mean token log probability\nAxis zoomed to show difference"
+                if reward == "reference_likelihood"
+                else "Negative log normalized perplexity\nAxis zoomed to show difference",
                 transform=ax.transAxes,
                 va="top",
                 fontsize=8,
@@ -441,9 +451,18 @@ def coverage_figure(result, config):
 
 def runtime_figure(result, config):
     fig, ax = plt.subplots(figsize=(10, 5.5))
-    fig.suptitle("Scoring cost on this machine", fontsize=17, fontweight="bold")
+    derived = (Path(config["run_dir"]) / "derivation.json").exists()
+    fig.suptitle(
+        "Source-run inference cost" if derived else "Scoring cost on this machine",
+        fontsize=17,
+        fontweight="bold",
+    )
     order = ["lexical", "bertscore", "bleurt", "lm"]
-    labels = ["ROUGE-L + length", "BERTScore", "BLEURT", "Qwen: all 3 LM rewards"]
+    lm_label = (
+        "Qwen: LM rewards (NOVER reuses likelihoods)"
+        if "nover" in result["rewards"] else "Qwen: all 3 LM rewards"
+    )
+    labels = ["ROUGE-L + length", "BERTScore", "BLEURT", lm_label]
     if "reference_likelihood" not in result["rewards"]:
         order, labels = order[:-1], labels[:-1]
     for reward in ("smart1_bertscore", "smart1_bleurt"):
@@ -532,7 +551,7 @@ def write_reports(result, config):
         "Reddit references are original human TL;DRs joined by post ID with matching post text. Pairs containing the reference itself are excluded. LitBench references are the highest-upvote distinct story outside the pair; maximum observed upvotes resolve varying scraped counts.",
         "The length baseline counts full-output words. ROUGE-L uses full texts. Neural scores use the saved scored_text/ inputs and may undergo additional encoder truncation. Human preferences refer to the full original outputs.",
         limits,
-        "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. Policy and frozen scorers coincide here because they share the same checkpoint.",
+        "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. LM scores use a fixed checkpoint; this run does not train a policy.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
     ]
     if "vr_cli" in result["rewards"]:
@@ -541,7 +560,30 @@ def write_reports(result, config):
             "continuous": "This run uses continuous VR-CLI with the original generic conditioning: percent perplexity improvement is the reward, without thresholds or clipping. For a shared baseline it has the same mathematical pairwise ordering as the reference-likelihood benchmark; floating-point precision and tie tolerance can still produce ties.",
             "thresholded": "This historical run uses thresholded VR-CLI: the published cutoffs at 0.05%, 1%, and 2% map improvement to rewards 0, 0.5, 0.9, and 1. Saved scores have not been converted to the continuous variant.",
         }
+        if result["reference_prompt_template"] == REFERENCE_PROMPT_TEMPLATE:
+            vr_notes["continuous_task_specific"] = (
+                "Reference likelihood and continuous VR-CLI share the same task-specific "
+                "summary/story prompt, target tokens, and conditioned likelihood evaluation. "
+                "The candidate is an example in the prompt; the held-out reference is scored. "
+                "VR-CLI additionally uses the same task prompt without the candidate as its baseline. "
+                "Their mathematical pairwise ordering is identical; numerical precision and tie "
+                "tolerance can still affect ties. Saved results from earlier prompt variants are unchanged."
+            )
         notes.append(vr_notes[result["vr_cli_variant"]])
+    if "nover" in result["rewards"]:
+        notes.append(
+            "NOVER proxy reuses the reference-likelihood prompt and mean log probability, divided by "
+            "1 + log10(candidate token count), following the authors' length normalization. "
+            "This negative-log-perplexity score rewards length at fixed likelihood. "
+            "Completed candidates substitute for reasoning; group ranks, format gating, efficiency "
+            "rewards, and policy/proxy synchronization are absent. This is an offline proxy, not full NOVER RL."
+        )
+    if (run / "derivation.json").exists():
+        notes.append(
+            "This report derives NOVER from saved reference-likelihood statistics without new model inference. "
+            "Other scores and inference timings are inherited from the source run; VR-CLI retains its original variant. "
+            "See derivation.json for source checksums and provenance."
+        )
     if config["pilot"]:
         notes.insert(
             0,

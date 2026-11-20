@@ -117,7 +117,7 @@ def supplementary(run_dir, pilot_dir):
 
         if "vr_cli" in rewards:
             # Monotonicity applies to the likelihoods under VR-CLI's own prompt.
-            # The generic reference-likelihood benchmark may rank pairs differently.
+            # Older runs used a separate generic reference-likelihood prompt.
             if variant == "continuous_task_specific":
                 vr_scores = scores[
                     (scores.dataset == dataset)
@@ -145,7 +145,7 @@ def supplementary(run_dir, pilot_dir):
                     "raw_likelihood_accuracy": raw.mean(),
                     "vr_cli_accuracy": vr.mean(),
                     "vr_cli_tie_rate": (vr == 0.5).mean(),
-                    "generic_likelihood_decision_agreement": (
+                    "reference_likelihood_decision_agreement": (
                         preference_credit(
                             frame.reference_likelihood, config["tie_tolerance"]
                         )

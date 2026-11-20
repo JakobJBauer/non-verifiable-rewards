@@ -5,6 +5,7 @@ from .bertscore import BERTScoreReward
 from .bleurt import BLEURTReward
 from .causal_lm import CausalLMScorer
 from .length import LengthReward
+from .nover import NOVERReward
 from .reference_likelihood import ReferenceLikelihoodReward
 from .rouge_l import RougeLReward
 from .self_certainty import SelfCertaintyReward
@@ -16,6 +17,7 @@ __all__ = [
     "BLEURTReward",
     "CausalLMScorer",
     "LengthReward",
+    "NOVERReward",
     "ReferenceLikelihoodReward",
     "Reward",
     "RougeLReward",

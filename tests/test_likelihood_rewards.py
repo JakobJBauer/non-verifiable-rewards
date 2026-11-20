@@ -3,15 +3,33 @@ import math
 import pytest
 
 from non_verifiable_rewards.rewards import (
+    NOVERReward,
     ReferenceLikelihoodReward,
     SelfCertaintyReward,
     VRCLIReward,
 )
+from non_verifiable_rewards.rewards.prompts import make_reference_context
 from non_verifiable_rewards.rewards.reference_likelihood import reference_context
 from non_verifiable_rewards.rewards.vr_cli import perplexity_improvement, vr_cli_context
 
 
 class RecordingScorer:
+    class Tokenizer:
+        def encode(self, text, *, add_special_tokens):
+            assert not add_special_tokens
+            return text.split()
+
+        def apply_chat_template(self, messages, **kwargs):
+            assert kwargs == {
+                "tokenize": False,
+                "add_generation_prompt": True,
+                "enable_thinking": False,
+            }
+            assert len(messages) == 1 and messages[0]["role"] == "user"
+            return f"USER:{messages[0]['content']}\nASSISTANT:"
+
+    tokenizer = Tokenizer()
+
     def __init__(self):
         self.calls = []
 
@@ -96,13 +114,42 @@ def test_vrcli_task_prompt_keeps_reference_as_target(task, example, instruction)
     assert reduction == baseline_reduction == "mean"
 
 
-def test_vrcli_rejects_unknown_task_and_accepts_custom_context():
+@pytest.mark.parametrize("cls", [ReferenceLikelihoodReward, VRCLIReward, NOVERReward])
+def test_likelihood_rewards_reject_unknown_task_and_accept_custom_context(cls):
     with pytest.raises(ValueError, match="task must"):
-        VRCLIReward(RecordingScorer(), task="unknown")
+        cls(RecordingScorer(), task="unknown")
     scorer = RecordingScorer()
-    reward = VRCLIReward(scorer, context_builder=reference_context)
+    reward = cls(scorer, context_builder=lambda p, c: f"custom:{p}:{c}")
     reward.score(["candidate"], references=["gold"], prompts=["input"])
-    assert scorer.calls[0][0] == [reference_context("input", "candidate")]
+    assert scorer.calls[0][0] == ["custom:input:candidate"]
+
+
+@pytest.mark.parametrize("task", ["summarization", "story_generation"])
+@pytest.mark.parametrize("chat", [False, True])
+def test_all_reference_rewards_send_identical_contexts_and_targets(task, chat):
+    scorer = RecordingScorer()
+    builder = make_reference_context(task=task, tokenizer=scorer.tokenizer) if chat else None
+    conditioned_calls = []
+    for cls in (ReferenceLikelihoodReward, VRCLIReward, NOVERReward):
+        options = {"reduction": "mean"} if cls is ReferenceLikelihoodReward else {}
+        reward = cls(scorer, task=task, context_builder=builder, **options)
+        start = len(scorer.calls)
+        reward.score(
+            ["candidate A", "candidate B"],
+            references=["held-out target"] * 2,
+            prompts=["source"] * 2,
+        )
+        conditioned_calls.append(scorer.calls[start])
+    assert conditioned_calls[0] == conditioned_calls[1] == conditioned_calls[2]
+    contexts, targets, reduction = conditioned_calls[0]
+    assert targets == ["held-out target"] * 2
+    assert reduction == "mean"
+    for candidate, context in zip(("candidate A", "candidate B"), contexts, strict=True):
+        assert candidate in context and "source" in context
+        assert "held-out target" not in context
+        assert ("summary" if task == "summarization" else "story") in context
+        if chat:
+            assert context.startswith("USER:") and context.endswith("ASSISTANT:")
 
 
 @pytest.mark.parametrize(

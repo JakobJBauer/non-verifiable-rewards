@@ -5,19 +5,8 @@ from typing import Literal
 
 from .base import validate_inputs
 from .causal_lm import CausalLMScorer
-
-
-def reference_context(prompt: str, candidate: str | None) -> str:
-    """Plain-text conditioning for the generic reference-likelihood baseline.
-
-    ``None`` denotes the no-candidate baseline. For an instruction-tuned model,
-    supply a builder using that model's chat template (see the README).
-    The reference is never part of this context; it is the scored continuation.
-    """
-    context = f"{prompt}\n\n"
-    if candidate:
-        context += f"Candidate response:\n{candidate}\n\n"
-    return context + "Response:\n"
+from .prompts import Task, make_reference_context
+from .prompts import reference_context as reference_context  # Backward-compatible import.
 
 
 class ReferenceLikelihoodReward:
@@ -26,6 +15,7 @@ class ReferenceLikelihoodReward:
     Defaults to the sum of reference-token log probabilities. ``reduction='mean'``
     removes reference-length scaling; it gives the same within-pair rankings
     when both candidates use the same reference. No candidate tokens are scored.
+    Task instructions are shared with VR-CLI and NOVER; summaries are the default.
     """
 
     def __init__(
@@ -33,13 +23,18 @@ class ReferenceLikelihoodReward:
         scorer: CausalLMScorer,
         *,
         reduction: Literal["sum", "mean"] = "sum",
-        context_builder: Callable[[str, str | None], str] = reference_context,
+        task: Task = "summarization",
+        context_builder: Callable[[str, str | None], str] | None = None,
     ) -> None:
         if reduction not in ("sum", "mean"):
             raise ValueError("reduction must be 'sum' or 'mean'")
         self.scorer = scorer
         self.reduction = reduction
-        self.context_builder = context_builder
+        self.context_builder = (
+            make_reference_context(task=task)
+            if context_builder is None
+            else context_builder
+        )
 
     def score(
         self,

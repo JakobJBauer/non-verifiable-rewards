@@ -25,8 +25,10 @@ REWARDS = (
     "self_certainty",
     "reference_likelihood",
     "vr_cli",
+    "nover",
     "length",
 )
+LEGACY_REWARDS = tuple(reward for reward in REWARDS if reward != "nover")
 ALL_REWARDS = (*REWARDS, *SMART_REWARDS)
 BACKEND_REWARDS = {
     "lexical": ("rouge_l", "length"),
@@ -34,7 +36,7 @@ BACKEND_REWARDS = {
     "bleurt": ("bleurt",),
     "smart1_bertscore": ("smart1_bertscore",),
     "smart1_bleurt": ("smart1_bleurt",),
-    "lm": ("self_certainty", "reference_likelihood", "vr_cli"),
+    "lm": ("self_certainty", "reference_likelihood", "vr_cli", "nover"),
 }
 
 
@@ -51,10 +53,10 @@ def enabled_backends(config):
 
 
 def run_rewards(run):
-    """Use the recorded reward set; historical runs contain the base rewards."""
+    """Use the recorded reward set; historical environments predate NOVER."""
     path = Path(run) / "environment.json"
     if path.exists():
-        return tuple(json.loads(path.read_text()).get("rewards", REWARDS))
+        return tuple(json.loads(path.read_text()).get("rewards", LEGACY_REWARDS))
     return REWARDS
 
 
@@ -127,6 +129,8 @@ def code_digest():
 
 def ensure_run(config):
     run = Path(config["run_dir"])
+    if (run / "derivation.json").exists():
+        raise ValueError("Derived runs are report-only; choose a new run_dir for scoring")
     run.mkdir(parents=True, exist_ok=True)
     path = run / "config.json"
     if path.exists():

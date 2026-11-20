@@ -22,16 +22,14 @@ from non_verifiable_rewards.experiments.data import sample_pairs
 from non_verifiable_rewards.experiments.io import (
     BACKEND_REWARDS,
     DATASETS,
+    LEGACY_REWARDS,
+    REWARDS,
     Journal,
     read_jsonl,
     write_json,
     write_jsonl,
 )
-from non_verifiable_rewards.experiments.runner import (
-    Backend,
-    chat_context,
-    vrcli_chat_context,
-)
+from non_verifiable_rewards.experiments.runner import Backend
 from non_verifiable_rewards.experiments.smoke import (
     PILOT_REWARDS,
     lm_mode,
@@ -39,6 +37,12 @@ from non_verifiable_rewards.experiments.smoke import (
     smoke_check,
 )
 from non_verifiable_rewards.rewards import VRCLIReward
+from non_verifiable_rewards.rewards.prompts import (
+    REFERENCE_PROMPT_TEMPLATE,
+    chat_context,
+    make_reference_context,
+    task_for_dataset,
+)
 
 
 def test_reference_selection_never_uses_either_litbench_candidate():
@@ -165,21 +169,28 @@ def test_lexical_scores_use_full_original_outputs():
 
 @pytest.mark.parametrize("conditioned", [(-3.2, -3.4), (-1, -2)])
 @pytest.mark.parametrize("dataset", DATASETS)
-def test_lm_backend_uses_separate_task_likelihoods_for_vrcli(
+def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
     tmp_path, conditioned, dataset
 ):
     pair = make_pair(
-        dataset, "p", "Prompt", "better", "worse", "Reference", "ref", {}
+        dataset, "p", "Prompt", " ".join(["better"] * 100), "worse", "Reference", "ref", {}
     )
     pair["lengths"] = {
-        field: {"original_words": 1, "scored_words": 1, "truncated": False}
+        field: {
+            "original_words": len(pair[field].split()),
+            "scored_words": len(pair[field].split()),
+            "truncated": False,
+        }
         for field in ("prompt", "preferred", "rejected", "reference")
     }
     pair["reference_prefix_overlaps_candidate"] = False
 
     class Tokenizer:
         def apply_chat_template(self, messages, **kwargs):
-            return messages[0]["content"]
+            assert kwargs == {
+                "tokenize": False, "add_generation_prompt": True, "enable_thinking": False
+            }
+            return f"USER:{messages[0]['content']}\nASSISTANT:"
 
         def encode(self, text, **kwargs):
             return text.split()
@@ -197,9 +208,8 @@ def test_lm_backend_uses_separate_task_likelihoods_for_vrcli(
             self.calls.append(contexts)
             if len(contexts) == 1:
                 return [-3]
-            if "Here is an example" in contexts[0]:
-                return list(conditioned)
-            return [-4, -3]  # The generic prompt can have the opposite ordering.
+            assert "Here is an example" in contexts[0]
+            return list(conditioned)
 
         def self_certainty(self, contexts, candidates):
             assert contexts == [chat_context(self.tokenizer, "Prompt")] * 2
@@ -210,6 +220,7 @@ def test_lm_backend_uses_separate_task_likelihoods_for_vrcli(
     engine.vr_cli = VRCLIReward(engine.scorer)
     with Journal(tmp_path / "baselines.jsonl") as baselines:
         rows, _ = engine.evaluate(pair, pair, baselines)
+        assert len(engine.scorer.calls) == 2  # One baseline, one shared conditioned batch.
         repeated, timing = engine.evaluate(pair, pair, baselines)
         assert repeated == rows
         assert timing["baseline_cache_hit"]
@@ -220,7 +231,7 @@ def test_lm_backend_uses_separate_task_likelihoods_for_vrcli(
         _, timing = engine.evaluate(other, other, baselines)
         assert not timing["baseline_cache_hit"]  # Different task needs its own baseline.
     vr = [row for row in rows if row["reward"] == "vr_cli"]
-    generic = [row for row in rows if row["reward"] == "reference_likelihood"]
+    likelihood = [row for row in rows if row["reward"] == "reference_likelihood"]
     expected = [100 * (1 - math.exp(-3 - value)) for value in conditioned]
     assert [row["score"] for row in vr] == pytest.approx(expected)
     assert vr[0]["score"] > vr[1]["score"]
@@ -230,18 +241,38 @@ def test_lm_backend_uses_separate_task_likelihoods_for_vrcli(
     assert all(
         row["score"] == row["statistics"]["perplexity_improvement_percent"] for row in vr
     )
-    assert [row["score"] for row in generic] == [-4, -3]
-    assert [row["statistics"]["conditioned_logp_mean"] for row in generic] == [-4, -3]
+    assert [row["score"] for row in likelihood] == list(conditioned)
+    assert likelihood[0]["score"] > likelihood[1]["score"]
+    for ref_row, vr_row in zip(likelihood, vr, strict=True):
+        assert all(
+            vr_row["statistics"][key] == value
+            for key, value in ref_row["statistics"].items()
+        )
+        assert (
+            ref_row["statistics"]["reference_prompt_template"] == REFERENCE_PROMPT_TEMPLATE
+        )
+    nover = [row for row in rows if row["reward"] == "nover"]
+    assert [row["score"] for row in nover] == pytest.approx([conditioned[0] / 3, conditioned[1]])
+    assert [row["statistics"]["candidate_tokens"] for row in nover] == [100, 1]
+    assert all(row["statistics"]["length_log_base"] == 10 for row in nover)
+    assert len(engine.scorer.calls) == 5  # Two baselines, three shared batches.
     assert [row["statistics"]["conditioned_logp_mean"] for row in vr] == list(
         conditioned
     )
-    context = engine.scorer.calls[2][0]
+    builder = make_reference_context(
+        task=task_for_dataset(dataset), tokenizer=engine.scorer.tokenizer
+    )
+    assert engine.scorer.calls[0] == [builder(pair["prompt"], None)]
+    assert engine.scorer.calls[1] == [
+        builder(pair["prompt"], pair[side]) for side in ("preferred", "rejected")
+    ]
+    context = engine.scorer.calls[1][0]
     assert ("summary" if dataset == "reddit_tldr" else "story") in context
 
 
-def test_vrcli_rejects_unrecognized_dataset():
-    with pytest.raises(ValueError, match="No VR-CLI task prompt"):
-        vrcli_chat_context(None, "unknown", "Prompt")
+def test_reference_prompts_reject_unrecognized_dataset():
+    with pytest.raises(ValueError, match="No reference task prompt"):
+        task_for_dataset("unknown")
 
 
 @pytest.fixture
@@ -306,6 +337,7 @@ def synthetic_run(tmp_path):
 def test_analysis_preserves_ties_and_undefined_constant_correlations(synthetic_run):
     result = analyze(synthetic_run)
     assert result["vr_cli_variant"] == "thresholded"
+    assert result["reference_prompt_template"] == "generic"
     vr = result["summary"].query("reward == 'vr_cli'")
     assert vr.accuracy.tolist() == [0.5, 0.5]
     assert vr.tie_rate.tolist() == [1, 1]
@@ -313,6 +345,142 @@ def test_analysis_preserves_ties_and_undefined_constant_correlations(synthetic_r
     assert (
         Path(synthetic_run["run_dir"]) / "tables" / "candidate_scores.parquet"
     ).is_file()
+
+
+@pytest.fixture
+def legacy_run(synthetic_run):
+    run = Path(synthetic_run["run_dir"])
+    write_json(run / "config.json", synthetic_run)
+    write_json(run / "environment.json", {"schema_version": 1})
+    for path in (run / "scores" / "lm").glob("*.jsonl"):
+        records = read_jsonl(path)
+        for record in records:
+            record["rows"] = [row for row in record["rows"] if row["reward"] != "nover"]
+            for row in record["rows"]:
+                if row["reward"] == "reference_likelihood":
+                    row["score"] = -2 if row["side"] == "preferred" else -3
+                    row["statistics"] = {
+                        "conditioned_logp_mean": row["score"],
+                        "candidate_tokens": 1 if row["side"] == "preferred" else 100,
+                    }
+        write_jsonl(path, records)
+    return synthetic_run
+
+
+def test_legacy_reporting_and_smoke_remain_readable_but_new_runs_require_nover(legacy_run):
+    from non_verifiable_rewards.experiments.runner import score
+
+    run = Path(legacy_run["run_dir"])
+    result = analyze(legacy_run)
+    assert result["rewards"] == LEGACY_REWARDS
+    assert "nover" not in set(result["coverage"].reward)
+    record = read_jsonl(run / "scores" / "lm" / "reddit_tldr-shard-00000-of-00001.jsonl")[0]
+    write_json(run / "qwen_smoke_check.json", {"validation": record})
+    assert smoke_check(legacy_run)["validation"] == record
+    with pytest.raises(ValueError, match="LM reward set changed"):
+        score(legacy_run, "lm")
+    write_json(run / "environment.json", {"rewards": REWARDS})
+    with pytest.raises(ValueError, match="missing"):
+        analyze(legacy_run)
+    with pytest.raises(ValueError, match="incomplete"):
+        smoke_check(legacy_run)
+
+
+def test_legacy_smoke_without_completed_pair_requires_new_run(legacy_run, monkeypatch):
+    run = Path(legacy_run["run_dir"])
+    for path in (run / "scores" / "lm").glob("*.jsonl"):
+        write_jsonl(path, [])
+    write_json(run / "preprocessing.json", {})
+    monkeypatch.setattr(
+        "non_verifiable_rewards.experiments.assets.model_paths", lambda config: {}
+    )
+    with pytest.raises(ValueError, match="LM reward set changed"):
+        smoke_check(legacy_run)
+
+
+@pytest.mark.parametrize("task_prompt", [False, True])
+def test_nover_derivation_preserves_source_scores_and_reports_new_reward(
+    legacy_run, tmp_path, task_prompt
+):
+    from non_verifiable_rewards.experiments.io import ensure_run, file_sha256
+    from non_verifiable_rewards.experiments.nover import derive_nover
+
+    source = Path(legacy_run["run_dir"])
+    if task_prompt:
+        for path in (source / "scores" / "lm").glob("*.jsonl"):
+            records = read_jsonl(path)
+            for record in records:
+                for row in record["rows"]:
+                    if row["reward"] == "reference_likelihood":
+                        row["statistics"]["reference_prompt_template"] = REFERENCE_PROMPT_TEMPLATE
+            write_jsonl(path, records)
+    before = {str(p.relative_to(source)): file_sha256(p) for p in source.rglob("*") if p.is_file()}
+    output = tmp_path.parent / (tmp_path.name + "-derived")
+    config = derive_nover(source, output)
+    after = {str(p.relative_to(source)): file_sha256(p) for p in source.rglob("*") if p.is_file()}
+    assert before == after
+    for path in (source / "scores" / "lm").glob("*.jsonl"):
+        old_records = read_jsonl(path)
+        new_records = read_jsonl(output / path.relative_to(source))
+        for old, new in zip(old_records, new_records, strict=True):
+            new_rows = new.pop("rows")
+            assert {**new, "rows": [r for r in new_rows if r["reward"] != "nover"]} == old
+            assert [r["score"] for r in new_rows if r["reward"] == "nover"] == [-2, -1]
+            if task_prompt:
+                assert all(
+                    row["statistics"]["reference_prompt_template"] == REFERENCE_PROMPT_TEMPLATE
+                    for row in new_rows if row["reward"] == "nover"
+                )
+    result = analyze(config)
+    assert result["summary"].query("reward == 'nover'").accuracy.tolist() == [0, 0]
+    assert result["vr_cli_variant"] == "thresholded"
+    assert result["reference_prompt_template"] == (
+        REFERENCE_PROMPT_TEMPLATE if task_prompt else "generic"
+    )
+    provenance = json.loads((output / "derivation.json").read_text())
+    assert provenance["derived_candidate_records"] == 12
+    assert provenance["source_files_sha256"] == before
+    assert not provenance["new_model_inference"]
+    with pytest.raises(ValueError, match="report-only"):
+        ensure_run(config)
+    with pytest.raises(ValueError, match="already exists"):
+        derive_nover(source, output)
+    with pytest.raises(ValueError, match="separate"):
+        derive_nover(source, source / "derived")
+
+
+def test_nover_derivation_rejects_incomplete_likelihood_statistics(legacy_run, tmp_path):
+    from non_verifiable_rewards.experiments.nover import derive_nover
+
+    source = Path(legacy_run["run_dir"])
+    path = source / "scores" / "lm" / "reddit_tldr-shard-00000-of-00001.jsonl"
+    records = read_jsonl(path)
+    row = next(r for r in records[0]["rows"] if r["reward"] == "reference_likelihood")
+    row["statistics"]["candidate_tokens"] = 0
+    write_jsonl(path, records)
+    output = tmp_path.parent / (tmp_path.name + "-invalid")
+    with pytest.raises(ValueError, match="positive integer"):
+        derive_nover(source, output)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_analysis_identifies_shared_reference_template_and_rejects_mixed_runs(
+    synthetic_run, mixed
+):
+    root = Path(synthetic_run["run_dir"]) / "scores" / "lm"
+    for path in root.glob("*.jsonl"):
+        records = read_jsonl(path)
+        for index, record in enumerate(records):
+            for row in record["rows"]:
+                if row["reward"] == "reference_likelihood" and (not mixed or index == 0):
+                    row["statistics"]["reference_prompt_template"] = REFERENCE_PROMPT_TEMPLATE
+        write_jsonl(path, records)
+    if mixed:
+        with pytest.raises(ValueError, match="Mixed or unknown reference prompt templates"):
+            analyze(synthetic_run)
+    else:
+        assert analyze(synthetic_run)["reference_prompt_template"] == REFERENCE_PROMPT_TEMPLATE
 
 
 @pytest.mark.parametrize("mixed", [False, True])
@@ -362,7 +530,7 @@ def test_vrcli_diagnostics_check_its_own_prompt_likelihoods(synthetic_run):
     supplementary(run, run)
     diagnostics = pd.read_csv(run / "tables" / "vr_cli_information_loss.csv")
     assert diagnostics.ranking_inversions.eq(0).all()
-    assert diagnostics.generic_likelihood_decision_agreement.eq(0).all()
+    assert diagnostics.reference_likelihood_decision_agreement.eq(0).all()
     assert diagnostics.raw_likelihood_accuracy.eq(0).all()
     assert diagnostics.vr_cli_accuracy.eq(0).all()
 
@@ -467,7 +635,7 @@ def test_fresh_smoke_scores_only_one_pair_and_keeps_it_separate(
     )
     saved = smoke_check(synthetic_run)
     assert evaluated == [templates[0]["pair_id"]]
-    assert len(saved["validation"]["rows"]) == 6
+    assert len(saved["validation"]["rows"]) == 8
     assert saved["scored_input"]["pair_id"] == saved["input"]["pair_id"]
     assert smoke_check(synthetic_run) == saved
     assert len(evaluated) == 1
