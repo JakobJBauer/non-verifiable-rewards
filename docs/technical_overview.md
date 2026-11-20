@@ -13,6 +13,12 @@ preference pairs. It performs inference, comparison, and statistical analysis.
 There is no policy training, optimizer, GRPO implementation, generated rollout
 collection, LLM judge, or self-play in the current experiment.
 
+Current code also supports WMT14 German-to-English preferences and parallel
+training examples. The recorded November run remains a two-dataset result.
+Dataset scope is now explicit in new configs/manifests, and figures support
+one, two or three tasks. See the [WMT14 data guide](data_loading.md#wmt14-german-to-english)
+for source counts, human-rank handling and the translation-specific prompts.
+
 The [NOVER assessment](nover.md) documents its formula, source-code audit,
 completed-candidate adaptation, and separate comparison derived from the frozen
 GPU likelihoods. The original seven-method results below remain historical.

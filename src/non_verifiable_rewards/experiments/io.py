@@ -15,7 +15,8 @@ from pathlib import Path
 from .._hashing import digest, file_sha256
 
 SCHEMA_VERSION = 1
-DATASETS = ("reddit_tldr", "litbench")
+LEGACY_DATASETS = ("reddit_tldr", "litbench")
+DATASETS = (*LEGACY_DATASETS, "wmt14_de_en")
 SMART_REWARDS = ("smart1_bertscore", "smart1_bleurt")
 BACKENDS = ("lexical", "meteor", "bertscore", "bleurt", "lm", *SMART_REWARDS)
 REWARDS = (
@@ -43,6 +44,41 @@ BACKEND_REWARDS = {
     "smart1_bleurt": ("smart1_bleurt",),
     "lm": ("self_certainty", "reference_likelihood", "vr_cli", "nover"),
 }
+
+
+def configured_datasets(config):
+    """Explicit dataset scope; omitted scope preserves historical two-task runs."""
+    names = config.get("datasets", LEGACY_DATASETS)
+    if (
+        not isinstance(names, (list, tuple))
+        or not names
+        or any(not isinstance(name, str) or name not in DATASETS for name in names)
+        or len(set(names)) != len(names)
+    ):
+        raise ValueError("datasets must contain distinct known dataset names")
+    return tuple(names)
+
+
+def run_datasets(run):
+    """Read the frozen dataset scope instead of assuming every known task exists."""
+    run = Path(run)
+    path = run / "data_manifest.json"
+    if path.exists():
+        manifest = json.loads(path.read_text())
+        names = manifest.get(
+            "datasets", [name for name in DATASETS if name in manifest]
+        )
+        names = configured_datasets({"datasets": names})
+        config_path = run / "config.json"
+        if config_path.exists() and names != configured_datasets(
+            json.loads(config_path.read_text())
+        ):
+            raise ValueError(
+                "Dataset scope differs between the saved config and data manifest"
+            )
+        return names
+    path = run / "config.json"
+    return configured_datasets(json.loads(path.read_text()) if path.exists() else {})
 
 
 def configured_rewards(config):
@@ -113,6 +149,7 @@ def load_config(path):
     if config["device"] not in ("cpu", "cuda"):
         raise ValueError("device must be cpu or cuda")
     configured_rewards(config)
+    configured_datasets(config)
     return config
 
 
@@ -135,7 +172,9 @@ def code_digest():
 def ensure_run(config):
     run = Path(config["run_dir"])
     if (run / "derivation.json").exists():
-        raise ValueError("Derived runs are report-only; choose a new run_dir for scoring")
+        raise ValueError(
+            "Derived runs are report-only; choose a new run_dir for scoring"
+        )
     run.mkdir(parents=True, exist_ok=True)
     path = run / "config.json"
     if path.exists():
@@ -152,6 +191,7 @@ def ensure_run(config):
             "cpu_count": os.cpu_count(),
             "schema_version": SCHEMA_VERSION,
             "rewards": configured_rewards(config),
+            "datasets": configured_datasets(config),
             "config_sha256": digest(config),
             "code_sha256_at_creation": code_digest(),
             "packages": {

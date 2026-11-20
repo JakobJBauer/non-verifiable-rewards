@@ -2,7 +2,7 @@
 
 Implements percent perplexity improvement (Eq. 4), without the threshold
 schedule (Eq. 7), from Gurung & Lapata: https://arxiv.org/html/2503.22828v2
-The candidate summary/story substitutes for the paper's generated plan.
+The completed candidate substitutes for the paper's generated plan.
 """
 
 import math
@@ -38,7 +38,8 @@ class VRCLIReward:
     For a shared baseline, rankings match conditioned mean log likelihoods
     computed with the same context, up to floating-point precision and
     downstream tie tolerances. Defaults to summary instructions; select
-    task='story_generation' for stories or supply a custom context builder.
+    task='story_generation' for stories, task='translation_de_en' for German
+    to English, or supply a custom context builder.
     Baselines are deduplicated within a call, but never cached across calls,
     so sharing a scorer whose weights change cannot reuse stale baselines.
     """

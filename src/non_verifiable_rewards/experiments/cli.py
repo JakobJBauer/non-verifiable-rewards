@@ -36,6 +36,8 @@ def main():
         "--litbench-arrow", help="Optional existing raw LitBench train Arrow file"
     )
     parser.add_argument("--tldr-references", help="Optional original TL;DR valid.jsonl")
+    parser.add_argument("--wmt14-submissions", help="Optional official WMT14 submissions.tgz")
+    parser.add_argument("--wmt14-judgments", help="Optional official WMT14 manual-evaluation.tgz")
     parser.add_argument("--backend", choices=BACKENDS)
     parser.add_argument("--dataset", choices=DATASETS)
     parser.add_argument("--shard-index", type=int, default=0)
@@ -91,6 +93,8 @@ def main():
             sff_arrow=args.sff_arrow,
             litbench_arrow=args.litbench_arrow,
             tldr_references=args.tldr_references,
+            wmt14_submissions=args.wmt14_submissions,
+            wmt14_judgments=args.wmt14_judgments,
         )
     if args.command in ("download", "run"):
         from .assets import download_models

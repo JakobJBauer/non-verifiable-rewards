@@ -7,27 +7,29 @@ import pytest
 
 pytest.importorskip("scipy")
 
+from non_verifiable_rewards.data.pairs import (
+    litbench_pairs,
+    make_pair,
+    reddit_pairs,
+)
 from non_verifiable_rewards.experiments.analysis import (
     analyze,
     cluster_bootstrap,
     load_results,
     preference_credit,
 )
-from non_verifiable_rewards.data.pairs import (
-    litbench_pairs,
-    make_pair,
-    reddit_pairs,
-)
 from non_verifiable_rewards.experiments.data import sample_pairs
 from non_verifiable_rewards.experiments.io import (
     BACKEND_REWARDS,
-    DATASETS,
     LEGACY_REWARDS,
     REWARDS,
     Journal,
     read_jsonl,
     write_json,
     write_jsonl,
+)
+from non_verifiable_rewards.experiments.io import (
+    LEGACY_DATASETS as DATASETS,
 )
 from non_verifiable_rewards.experiments.runner import Backend
 from non_verifiable_rewards.experiments.smoke import (
@@ -179,13 +181,17 @@ def test_lexical_scores_use_full_original_outputs():
 
 
 @pytest.mark.parametrize("conditioned", [(-3.2, -3.4), (-1, -2)])
-@pytest.mark.parametrize("dataset", DATASETS)
+@pytest.mark.parametrize("dataset", (*DATASETS, "wmt14_de_en"))
 def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
     tmp_path, conditioned, dataset
 ):
     pair = make_pair(
         dataset, "p", "Prompt", " ".join(["better"] * 100), "worse", "Reference", "ref", {}
     )
+    if dataset == "wmt14_de_en":
+        from non_verifiable_rewards.rewards.prompts import translation_prompt
+
+        pair["prompt"] = translation_prompt("Ein deutscher Satz.")
     pair["lengths"] = {
         field: {
             "original_words": len(pair[field].split()),
@@ -223,7 +229,7 @@ def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
             return list(conditioned)
 
         def self_certainty(self, contexts, candidates):
-            assert contexts == [chat_context(self.tokenizer, "Prompt")] * 2
+            assert contexts == [chat_context(self.tokenizer, pair["prompt"])] * 2
             return [0.4] * len(candidates)
 
     engine = Backend.__new__(Backend)
@@ -278,7 +284,10 @@ def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
         builder(pair["prompt"], pair[side]) for side in ("preferred", "rejected")
     ]
     context = engine.scorer.calls[1][0]
-    assert ("summary" if dataset == "reddit_tldr" else "story") in context
+    assert {"reddit_tldr": "summary", "litbench": "story", "wmt14_de_en": "English translation"}[dataset] in context
+    if dataset == "wmt14_de_en":
+        assert context.count("Translate the following German text into English:") == 1
+        assert "Ein deutscher Satz." in context
 
 
 def test_reference_prompts_reject_unrecognized_dataset():

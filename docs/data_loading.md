@@ -77,6 +77,10 @@ for all generated candidates/reward conditions. The source pair ID makes the
 choice auditable. This is a view of the reference-eligible preference cohort,
 not the full universe of prompts available for RL.
 
+For WMT14 training, use `load_wmt14` directly; it already returns policy
+prompts and references without preference candidates. Do not turn the
+human-ranked WMT14 test set into RL training data.
+
 Freeze these partitions and reference choices across reward runs. Use validation
 for tuning and reserve test for final generated-model comparisons. SFF also has
 upstream train/validation partitions; check prompt overlap when combining or
@@ -118,3 +122,84 @@ validation references for training. `return_metadata=True` returns
 or local paths/checksums. The CLI's existing `--sff-arrow`, `--litbench-arrow`,
 and `--tldr-references` flags delegate to these APIs. Frozen experiment files
 are still checked and reused without reconstructing references.
+
+## WMT14 German to English
+
+```python
+from non_verifiable_rewards.data import load_wmt14, load_wmt14_preferences
+
+# Parallel training examples: prompt + reference, without preference labels.
+train = load_wmt14(split="train", streaming=True)
+
+# Offline reward evaluation: prompt + preferred + rejected + reference.
+evaluation, metadata = load_wmt14_preferences(split="test", return_metadata=True)
+```
+
+The [WMT14 parallel corpus](https://huggingface.co/datasets/wmt/wmt14) `de-en`
+configuration contains **4,508,785 training rows**, **3,000 validation rows**,
+and **3,003 test rows** before blank-text filtering. These are aligned German
+source / English reference pairs; they have no human preference labels.
+`load_wmt14` supports all three splits and optional streaming. It strips outer
+whitespace, removes empty sources/references, preserves source-row indices in
+metadata, and accepts `revision=` for a pinned Hugging Face revision. Counts
+above describe upstream rows, not deduplicated prompts or a downloaded local
+training subset. Audit train/evaluation overlap when choosing an RL cohort.
+
+`load_wmt14_preferences` uses the official [WMT14 evaluation release](https://www.statmt.org/wmt14/results.html):
+
+- `submissions.tgz`: aligned German sources, English references and system translations.
+- `wmt14-manual-evaluation.tgz`: anonymized human rankings of five translations.
+
+The loader reads matching files from that same release and uses the documented
+1-based `srcIndex`/`segmentId` to join each judgment to the source, reference,
+and system outputs. It checks alignment and system IDs rather than mixing
+different WMT14 releases or language directions. Lower ranks mean better
+translations. Rank `-1` means unranked; equal ranks do not define a preference.
+No reference is inferred from a winning system translation.
+
+Verified on the public archives:
+
+| Quantity | Count |
+| --- | ---: |
+| German → English human ranking records | 2,570 |
+| Non-tied, ranked observations after text filters | 18,137 |
+| Distinct oriented text pairs | 15,142 |
+| Source sentences in those pairs | 1,466 |
+| Unordered text pairs with opposing strict judgments | 423 |
+
+Empty texts, identical candidates, and comparisons containing the reference
+itself are excluded. Repeated observations of the same oriented pair are merged
+with all original judge IDs, ranks, system IDs, and CSV row indices retained in
+`metadata.judgments`. Opposing strict labels remain separate, matching the SFF
+policy; `metadata.opposing_judgments` exposes disagreement. Sampling remains
+uniform over distinct labeled pairs, not annotation-weighted. Uncertainty
+resamples source-sentence groups; multiple pairs are not independent sentences.
+
+Every WMT14 `prompt` explicitly asks for German-to-English translation. This
+request is used directly for policy generation and self-certainty. Reference
+likelihood, VR-CLI, and NOVER share `task="translation_de_en"`: the candidate
+appears as an example English translation of the same German text, and the
+English reference remains the scored continuation. The VR-CLI baseline omits
+only the example. English-target lexical, embedding, BLEURT and SMART rewards
+continue to receive English candidates/references.
+
+For all three tasks, use `configs/eidf_qwen3_4b_three_tasks.toml` on EIDF (see
+[cluster instructions](eidf_execution.md)); it enables SMART as well as the
+default rewards. Its new output directory avoids mixing historical scores.
+The existing launcher accepts it via:
+
+```bash
+NVR_CONFIG=configs/eidf_qwen3_4b_three_tasks.toml bash scripts/run_eidf.sh
+```
+
+Alternatively add `datasets = ["reddit_tldr", "litbench", "wmt14_de_en"]` to a
+new config, or select only `datasets = ["wmt14_de_en"]`. Omitted scope preserves
+the original two tasks. Preparation, preprocessing, scoring, smoke checks,
+analysis and figures all follow the saved scope; reporting old two-task runs
+does not require WMT14 files. `--dataset wmt14_de_en` restricts a score invocation
+within a run that already includes WMT14.
+
+`prepare` accepts `--wmt14-submissions` and `--wmt14-judgments` for local archive
+overrides. The Python equivalents are `submissions_archive=` and
+`judgments_archive=`. Downloads use the datasets cache. Source URLs, archive
+SHA-256 hashes, filtering counts, and per-pair judgments are saved for auditing.

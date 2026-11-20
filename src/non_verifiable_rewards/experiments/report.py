@@ -16,7 +16,7 @@ from matplotlib.ticker import PercentFormatter
 
 from ..rewards.prompts import REFERENCE_PROMPT_TEMPLATE
 from .analysis import analyze
-from .io import DATASETS, REWARDS, code_files, file_sha256, utc_now, write_json
+from .io import BACKEND_REWARDS, REWARDS, code_files, file_sha256, utc_now, write_json
 
 logger = logging.getLogger(__name__)
 LABELS = {
@@ -33,7 +33,7 @@ LABELS = {
     "nover": "NOVER proxy",
     "length": "Length baseline",
 }
-DATASET_LABELS = {"reddit_tldr": "Reddit TL;DR", "litbench": "LitBench"}
+DATASET_LABELS = {"reddit_tldr": "Reddit TL;DR", "litbench": "LitBench", "wmt14_de_en": "WMT14 German → English"}
 COLORS = dict(
     zip(
         REWARDS,
@@ -85,7 +85,8 @@ def save_figure(fig, name, config, *, bottom=0.09):
 def accuracy_figures(result, config):
     rewards = result["rewards"]
     for delta in (False, True):
-        fig, axes = plt.subplots(1, 2, figsize=(13, 5.7))
+        fig, axes = plt.subplots(1, len(result["datasets"]), figsize=(6.5 * len(result["datasets"]), 5.7), squeeze=False)
+        axes = axes[0]
         fig.suptitle(
             "Improvement over the length baseline"
             if delta
@@ -106,7 +107,7 @@ def accuracy_figures(result, config):
             fontsize=10,
             color="#555555",
         )
-        for ax, name in zip(axes, DATASETS, strict=True):
+        for ax, name in zip(axes, result["datasets"], strict=True):
             rows = (
                 result["summary"]
                 .query("dataset == @name")
@@ -180,9 +181,10 @@ def heatmaps(result, config):
             1,
         ),
     ):
-        fig, axes = plt.subplots(1, 2, figsize=(15, 7))
+        fig, axes = plt.subplots(1, len(result["datasets"]), figsize=(7.5 * len(result["datasets"]), 7), squeeze=False)
+        axes = axes[0]
         fig.suptitle(title, fontsize=17, fontweight="bold")
-        for ax, name in zip(axes, DATASETS, strict=True):
+        for ax, name in zip(axes, result["datasets"], strict=True):
             matrix = result[key][name].loc[list(rewards), list(rewards)].to_numpy()
             cmap = plt.get_cmap("RdBu_r" if low < 0 else "Blues").copy()
             cmap.set_bad("#e6e6e6")
@@ -222,11 +224,12 @@ def heatmaps(result, config):
 
 def length_figure(result, config):
     rewards = result["rewards"]
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.8))
+    fig, axes = plt.subplots(1, len(result["datasets"]), figsize=(7 * len(result["datasets"]), 5.8), squeeze=False)
+    axes = axes[0]
     fig.suptitle(
         "Does each reward follow the longer output?", fontsize=17, fontweight="bold"
     )
-    for ax, name in zip(axes, DATASETS, strict=True):
+    for ax, name in zip(axes, result["datasets"], strict=True):
         frame = result["lengths"].query("dataset == @name")
         conditions = [
             item
@@ -269,7 +272,7 @@ def length_figure(result, config):
 
 
 def vrcli_figure(result, config):
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig, axes = plt.subplots(2, len(result["datasets"]), figsize=(6 * len(result["datasets"]), 8), squeeze=False)
     variant_label = (
         "task prompts"
         if result["vr_cli_variant"] == "continuous_task_specific"
@@ -280,7 +283,7 @@ def vrcli_figure(result, config):
         fontsize=17,
         fontweight="bold",
     )
-    for col, name in enumerate(DATASETS):
+    for col, name in enumerate(result["datasets"]):
         rows = result["scores"].query(
             "dataset == @name and reward == 'vr_cli' and status == 'ok'"
         )
@@ -422,11 +425,11 @@ def coverage_figure(result, config):
         frame["rate"] = frame[field] / (2 * frame.expected_pairs)
         matrix = (
             frame.pivot(index="dataset", columns="reward", values="rate")
-            .loc[list(DATASETS), list(rewards)]
+            .loc[list(result["datasets"]), list(rewards)]
             .to_numpy()
         )
         ax.imshow(matrix, vmin=0, vmax=1, cmap="YlOrRd", aspect="auto")
-        for row in range(len(DATASETS)):
+        for row in range(len(result["datasets"])):
             for col in range(len(rewards)):
                 ax.text(
                     col,
@@ -436,7 +439,7 @@ def coverage_figure(result, config):
                     va="center",
                     color="white" if matrix[row, col] > 0.65 else "black",
                 )
-        ax.set_yticks(range(2), [DATASET_LABELS[name] for name in DATASETS])
+        ax.set_yticks(range(len(result["datasets"])), [DATASET_LABELS[name] for name in result["datasets"]])
         ax.set_xticks(
             range(len(rewards)),
             [
@@ -478,17 +481,22 @@ def runtime_figure(result, config):
         if reward in result["rewards"]:
             order.append(reward)
             labels.append(LABELS[reward])
-    for index, name in enumerate(DATASETS):
+    selected = [
+        (backend, label) for backend, label in zip(order, labels, strict=True)
+        if set(BACKEND_REWARDS[backend]) & set(result["rewards"])
+    ]
+    order, labels = zip(*selected, strict=True)
+    for index, name in enumerate(result["datasets"]):
         rows = (
-            result["runtime"].query("dataset == @name").set_index("backend").loc[order]
+            result["runtime"].query("dataset == @name").set_index("backend").loc[list(order)]
         )
-        positions = np.arange(len(order)) + (index - 0.5) * 0.33
+        positions = np.arange(len(order)) + (index - (len(result["datasets"]) - 1) / 2) * (0.75 / len(result["datasets"]))
         ax.scatter(
             rows.seconds_per_candidate,
             positions,
             s=70,
             label=DATASET_LABELS[name],
-            color=("#4477AA", "#EE7733")[index],
+            color=("#4477AA", "#EE7733", "#228833")[index],
         )
         for position, value in zip(positions, rows.seconds_per_candidate, strict=True):
             ax.annotate(
@@ -563,16 +571,24 @@ def write_reports(result, config):
         "Reference likelihood uses mean reference-token log probability. VR-CLI measures percent reference-perplexity improvement relative to a no-candidate baseline. LM scores use a fixed checkpoint; this run does not train a policy.",
         "Correlations use preferred-minus-rejected score margins; decision agreement separately measures matching win/tie/loss decisions. n/a means correlation is undefined for a constant reward. High correlation alone does not establish redundancy or RL robustness.",
     ]
+    if "wmt14_de_en" in result["datasets"]:
+        notes.append(
+            "WMT14 German-to-English pairs use official newstest2014 English references "
+            "and strict human ranks of system translations. Ties/unranked judgments and "
+            "overlapping texts are excluded. Duplicate labeled text pairs are merged; "
+            "opposing judgments remain explicit. The parallel training corpus is separate "
+            "and is not used for this preference evaluation."
+        )
     if "vr_cli" in result["rewards"]:
         vr_notes = {
-            "continuous_task_specific": "This run uses continuous VR-CLI with task-specific summary/story instructions. The candidate is an example in the prompt; the held-out reference is the scored continuation. The no-candidate baseline uses the same task instruction. VR-CLI requires separate likelihood evaluations and can rank candidates differently from the generic reference-likelihood benchmark. This is an unthresholded adaptation of the published reward; better preference accuracy is not established by the prompt change alone.",
+            "continuous_task_specific": "This run uses continuous VR-CLI with task-specific summary/story/translation instructions. The candidate is an example in the prompt; the held-out reference is the scored continuation. The no-candidate baseline uses the same task instruction. VR-CLI requires separate likelihood evaluations and can rank candidates differently from the generic reference-likelihood benchmark. This is an unthresholded adaptation of the published reward; better preference accuracy is not established by the prompt change alone.",
             "continuous": "This run uses continuous VR-CLI with the original generic conditioning: percent perplexity improvement is the reward, without thresholds or clipping. For a shared baseline it has the same mathematical pairwise ordering as the reference-likelihood benchmark; floating-point precision and tie tolerance can still produce ties.",
             "thresholded": "This historical run uses thresholded VR-CLI: the published cutoffs at 0.05%, 1%, and 2% map improvement to rewards 0, 0.5, 0.9, and 1. Saved scores have not been converted to the continuous variant.",
         }
         if result["reference_prompt_template"] == REFERENCE_PROMPT_TEMPLATE:
             vr_notes["continuous_task_specific"] = (
                 "Reference likelihood and continuous VR-CLI share the same task-specific "
-                "summary/story prompt, target tokens, and conditioned likelihood evaluation. "
+                "summary/story/translation prompt, target tokens, and conditioned likelihood evaluation. "
                 "The candidate is an example in the prompt; the held-out reference is scored. "
                 "VR-CLI additionally uses the same task prompt without the candidate as its baseline. "
                 "Their mathematical pairwise ordering is identical; numerical precision and tie "
@@ -619,7 +635,7 @@ def write_reports(result, config):
             "The local Qwen linear layers use PyTorch dynamic int8 quantization; score reductions remain float32. Quantization is disabled in the GPU configuration."
         )
     findings = []
-    for name in DATASETS:
+    for name in result["datasets"]:
         frame = result["summary"].query("dataset == @name")
         winner = frame.loc[frame.accuracy.idxmax()]
         above_length = frame[(frame.reward != "length") & (frame.delta_ci_low > 0)]

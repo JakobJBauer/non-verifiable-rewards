@@ -32,9 +32,9 @@ from ..rewards.prompts import (
 from .assets import model_paths
 from .io import (
     BACKEND_REWARDS,
-    DATASETS,
     SMART_REWARDS,
     Journal,
+    configured_datasets,
     digest,
     enabled_backends,
     ensure_run,
@@ -394,6 +394,9 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
         raise ValueError("Require 0 <= shard_index < num_shards")
     if backend not in enabled_backends(config):
         raise ValueError(f"Backend {backend!r} is disabled; enable include_smart_rewards in a new run")
+    names = configured_datasets(config)
+    if dataset is not None and dataset not in names:
+        raise ValueError(f"Dataset {dataset!r} is not enabled in this run")
     run = ensure_run(config)
     if backend == "lexical" and set(BACKEND_REWARDS[backend]) - set(run_rewards(run)):
         raise ValueError("Lexical reward set changed; choose a new run_dir for scoring")
@@ -406,7 +409,7 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
     models = model_paths(config)
     data_manifest = json.loads((run / "data_manifest.json").read_text())
     preprocessing = json.loads((run / "preprocessing.json").read_text())
-    for name in DATASETS:
+    for name in names:
         if file_sha256(run / "data" / f"{name}.jsonl") != data_manifest[name]["sha256"]:
             raise ValueError("Original benchmark data changed")
         if (
@@ -414,7 +417,7 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
             != preprocessing["files"][name]
         ):
             raise ValueError("Scored benchmark text changed")
-    names = (dataset,) if dataset else DATASETS
+    names = (dataset,) if dataset else names
     shard_name = f"shard-{shard_index:05d}-of-{num_shards:05d}"
     directory = run / "scores" / backend
     directory.mkdir(parents=True, exist_ok=True)

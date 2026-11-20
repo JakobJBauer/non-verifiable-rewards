@@ -5,8 +5,8 @@ import logging
 import random
 from pathlib import Path
 
-from ..data import load_litbench, load_sff
-from .io import DATASETS, ensure_run, file_sha256, write_json, write_jsonl
+from ..data import load_litbench, load_sff, load_wmt14_preferences
+from .io import configured_datasets, ensure_run, file_sha256, write_json, write_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -20,44 +20,60 @@ def sample_pairs(pairs, count, seed):
     return ordered[:count]
 
 
-def prepare(config, *, sff_arrow=None, litbench_arrow=None, tldr_references=None):
+def prepare(
+    config,
+    *,
+    sff_arrow=None,
+    litbench_arrow=None,
+    tldr_references=None,
+    wmt14_submissions=None,
+    wmt14_judgments=None,
+):
     import pandas as pd
 
     run = ensure_run(config)
-    if all((run / "data" / f"{name}.jsonl").exists() for name in DATASETS):
+    names = configured_datasets(config)
+    if all((run / "data" / f"{name}.jsonl").exists() for name in names):
         manifest = json.loads((run / "data_manifest.json").read_text())
-        for name in DATASETS:
+        for name in names:
             if manifest[name]["sha256"] != file_sha256(run / "data" / f"{name}.jsonl"):
                 raise ValueError("Prepared benchmark data changed after it was frozen")
         logger.info("Prepared datasets already exist and their hashes match")
         return
     cache = str(Path(config["cache_dir"]) / "datasets")
-    sff, sff_metadata = load_sff(
-        split="validation",
-        cache_dir=cache,
-        sff_arrow=sff_arrow,
-        tldr_references=tldr_references,
-        return_metadata=True,
-    )
-    litbench, litbench_metadata = load_litbench(
-        split="train",
-        cache_dir=cache,
-        litbench_arrow=litbench_arrow,
-        return_metadata=True,
-    )
-    sources = {
-        **sff_metadata["validation"]["sources"],
-        **litbench_metadata["train"]["sources"],
+    loaders = {
+        "reddit_tldr": lambda: load_sff(
+            split="validation",
+            cache_dir=cache,
+            sff_arrow=sff_arrow,
+            tldr_references=tldr_references,
+            return_metadata=True,
+        ),
+        "litbench": lambda: load_litbench(
+            split="train",
+            cache_dir=cache,
+            litbench_arrow=litbench_arrow,
+            return_metadata=True,
+        ),
+        "wmt14_de_en": lambda: load_wmt14_preferences(
+            split="test",
+            cache_dir=cache,
+            submissions_archive=wmt14_submissions,
+            judgments_archive=wmt14_judgments,
+            return_metadata=True,
+        ),
     }
     manifest = {
-        "sources": sources,
+        "datasets": names,
+        "sources": {},
         "sampling": "Uniform labeled pairs after filtering, fixed shuffled order",
         "seed": config["seed"],
     }
-    for name, eligible, audit in (
-        ("reddit_tldr", sff, sff_metadata["validation"]["audit"]),
-        ("litbench", litbench, litbench_metadata["train"]["audit"]),
-    ):
+    for name in names:
+        eligible, metadata_by_split = loaders[name]()
+        metadata = next(iter(metadata_by_split.values()))
+        audit = metadata["audit"]
+        manifest["sources"].update(metadata["sources"])
         selected = sample_pairs(eligible, config["pairs_per_dataset"], config["seed"])
         target = run / "data" / f"{name}.jsonl"
         write_jsonl(target, selected)
@@ -79,6 +95,7 @@ def preprocess(config, tokenizer, models):
     from .io import read_jsonl
 
     run = Path(config["run_dir"])
+    names = configured_datasets(config)
     manifest_path = run / "preprocessing.json"
     expected = {
         "lm_revision": models["lm"]["revision"],
@@ -95,7 +112,7 @@ def preprocess(config, tokenizer, models):
         existing = json.loads(manifest_path.read_text())
         if any(existing[key] != value for key, value in expected.items()):
             raise ValueError("Preprocessing configuration changed")
-        for name in DATASETS:
+        for name in names:
             if (
                 file_sha256(run / "scored_text" / f"{name}.jsonl")
                 != existing["files"][name]
@@ -103,7 +120,7 @@ def preprocess(config, tokenizer, models):
                 raise ValueError("Scored text changed after preparation")
         return
     hashes = {}
-    for name in DATASETS:
+    for name in names:
         records = []
         for pair in read_jsonl(run / "data" / f"{name}.jsonl"):
             record = dict(pair)

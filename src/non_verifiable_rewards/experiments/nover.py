@@ -10,11 +10,11 @@ from pathlib import Path
 from ..rewards.nover import NOVERReward, nover_length_normalizer
 from .analysis import load_results, report_rewards
 from .io import (
-    DATASETS,
     REWARDS,
     ensure_run,
     file_sha256,
     read_jsonl,
+    run_datasets,
     utc_now,
     write_json,
     write_jsonl,
@@ -60,7 +60,7 @@ def _derive_row(row):
 def derive_nover(run_dir, output_dir):
     """Create a separate, report-only run; source scores and hashes are retained.
 
-    Input must have a complete reference-likelihood journal for both datasets.
+    Input must have a complete reference-likelihood journal for every dataset in the source run.
     The saved token counts must describe the candidate used for that inference.
     Original scoring times are inherited, not presented as fresh measurements.
     """
@@ -80,7 +80,7 @@ def derive_nover(run_dir, output_dir):
     # Validate every derived value before creating output artifacts.
     journals = {}
     derived_count = 0
-    for dataset in DATASETS:
+    for dataset in run_datasets(source):
         for path in sorted((source / "scores" / "lm").glob(f"{dataset}-shard-*.jsonl")):
             records = read_jsonl(path)
             for record in records:

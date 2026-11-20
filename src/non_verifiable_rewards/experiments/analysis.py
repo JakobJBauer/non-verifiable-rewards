@@ -7,7 +7,14 @@ import numpy as np
 import pandas as pd
 
 from ..rewards.prompts import REFERENCE_PROMPT_TEMPLATE
-from .io import ALL_REWARDS, BACKENDS, DATASETS, read_jsonl, run_rewards, write_jsonl
+from .io import (
+    ALL_REWARDS,
+    BACKENDS,
+    read_jsonl,
+    run_datasets,
+    run_rewards,
+    write_jsonl,
+)
 
 
 def preference_credit(margins, tolerance=1e-7):
@@ -63,10 +70,10 @@ def load_results(run, required_rewards=None):
     run = Path(run)
     if required_rewards is None:
         required_rewards = report_rewards({"run_dir": str(run)})
-    originals = {name: read_jsonl(run / "data" / f"{name}.jsonl") for name in DATASETS}
+    originals = {name: read_jsonl(run / "data" / f"{name}.jsonl") for name in run_datasets(run)}
     rows, timing_rows = [], []
     for backend in BACKENDS:
-        for name in DATASETS:
+        for name in originals:
             for path in sorted(
                 (run / "scores" / backend).glob(f"{name}-shard-*.jsonl")
             ):
@@ -165,7 +172,7 @@ def analyze(config):
         [],
     )
     correlations, agreements, examples = {}, {}, []
-    for name in DATASETS:
+    for name in originals:
         subset = scores[scores.dataset == name]
         pairs = originals[name]
         pair_lookup = {pair["pair_id"]: pair for pair in pairs}
@@ -330,7 +337,7 @@ def analyze(config):
         ("length_diagnostics", lengths),
     ):
         export_table(frame, run / "tables" / label)
-    for name in DATASETS:
+    for name in originals:
         for label, frame in (
             ("spearman", correlations[name]),
             ("decision_agreement", agreements[name]),
@@ -371,6 +378,7 @@ def analyze(config):
     if not worker_frame.empty:
         export_table(worker_frame, run / "tables" / "workers")
     return {
+        "datasets": tuple(originals),
         "rewards": rewards,
         "vr_cli_variant": variant,
         "reference_prompt_template": prompt_template,

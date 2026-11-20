@@ -10,7 +10,6 @@ from non_verifiable_rewards.data.pairs import make_pair
 from non_verifiable_rewards.experiments.io import (
     ALL_REWARDS,
     BACKEND_REWARDS,
-    DATASETS,
     REWARDS,
     SMART_REWARDS,
     configured_rewards,
@@ -19,6 +18,9 @@ from non_verifiable_rewards.experiments.io import (
     run_rewards,
     write_json,
     write_jsonl,
+)
+from non_verifiable_rewards.experiments.io import (
+    LEGACY_DATASETS as DATASETS,
 )
 from non_verifiable_rewards.experiments.runner import Backend, failure_rows, score
 

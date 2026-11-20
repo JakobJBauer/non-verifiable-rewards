@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .analysis import export_table, preference_credit, vrcli_variant
-from .io import DATASETS
+from .io import run_datasets
 
 
 def supplementary(run_dir, pilot_dir):
@@ -25,7 +25,7 @@ def supplementary(run_dir, pilot_dir):
     variant = vrcli_variant(scores)
     comparisons, overlaps, truncation, weighting, information_loss = [], [], [], [], []
 
-    for dataset in DATASETS:
+    for dataset in run_datasets(run):
         frame = margins[margins.dataset == dataset].set_index("pair_id")
         boot = bootstrap[bootstrap.dataset == dataset]
         for first, second in combinations(rewards, 2):

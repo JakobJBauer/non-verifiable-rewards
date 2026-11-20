@@ -180,6 +180,22 @@ def _pair_dataset(pairs, dataset):
     features["metadata"] = {name: Value(kind) for name, kind in metadata.items()}
     if dataset == "litbench":
         features["metadata"]["reference_observed_upvotes"] = [Value("int64")]
+    elif dataset == "wmt14_de_en":
+        features["metadata"] = {
+            "segment_id": Value("int64"),
+            "reference_rule": Value("string"),
+            "opposing_judgments": Value("int64"),
+            "judgments": [
+                {
+                    "source_row": Value("int64"),
+                    "judge_id": Value("string"),
+                    "preferred_system": Value("string"),
+                    "rejected_system": Value("string"),
+                    "preferred_rank": Value("int64"),
+                    "rejected_rank": Value("int64"),
+                }
+            ],
+        }
     return (
         Dataset.from_list(pairs, features=Features(features))
         if pairs

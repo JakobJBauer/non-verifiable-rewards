@@ -7,9 +7,9 @@ from pathlib import Path
 
 from .io import (
     BACKEND_REWARDS,
-    DATASETS,
     SMART_REWARDS,
     Journal,
+    configured_datasets,
     digest,
     ensure_run,
     file_sha256,
@@ -90,7 +90,7 @@ def smoke_check(config):
 
     models = model_paths(config)
     validation, selected = None, None
-    for name in DATASETS:
+    for name in configured_datasets(config):
         for journal in sorted((run / "scores" / "lm").glob(f"{name}-shard-*.jsonl")):
             for record in read_jsonl(journal):
                 if successful_pair(record, rewards):
@@ -109,7 +109,7 @@ def smoke_check(config):
     if validation is None:
         if set(rewards) != set(BACKEND_REWARDS["lm"]):
             raise ValueError("LM reward set changed; choose a new run_dir for scoring")
-        selected = DATASETS[0]
+        selected = configured_datasets(config)[0]
         pair = read_jsonl(run / "scored_text" / f"{selected}.jsonl")[0]
         original = next(
             item

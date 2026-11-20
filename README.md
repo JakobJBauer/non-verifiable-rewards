@@ -1,6 +1,7 @@
 # Non-verifiable rewards
 
-Offline reward scoring for Reddit TL;DR and LitBench preference comparisons.
+Offline reward scoring for Reddit TL;DR, LitBench, and WMT14 German → English
+preference comparisons.
 Each reward lives in its own module under `src/non_verifiable_rewards/rewards`
 and can also be imported from `non_verifiable_rewards.rewards`.
 
@@ -30,6 +31,19 @@ For policy rollouts, use `split_by_prompt` to reserve entire prompts, then
 `to_prompt_dataset` to obtain one prompt/reference per task. See the
 [data-loading guide](docs/data_loading.md) for training/evaluation examples,
 local source overrides, and the limitations of the LitBench reference proxy.
+
+WMT14 provides two separate interfaces: `load_wmt14(split="train", streaming=True)`
+for German prompts/English references without preference labels, and
+`load_wmt14_preferences(split="test")` for human-ranked translations with an
+independent English reference. The training corpus has **4,508,785 parallel
+rows** before blank-text filtering. The preference loader yields **15,142
+distinct labeled pairs from 1,466 test sentences**. See the
+[WMT14 data and configuration guide](docs/data_loading.md#wmt14-german-to-english).
+
+`configs/eidf_qwen3_4b_three_tasks.toml` enables all three datasets and all reward
+backends, including SMART, in a new output directory. A config can instead set
+`datasets = ["wmt14_de_en"]` for a translation-only run. Configs without a
+`datasets` setting retain the original two-dataset scope.
 
 ## Completed GPU benchmark
 
@@ -340,7 +354,7 @@ lm = CausalLMScorer.from_pretrained(
 )
 
 # One shared task template and chat serialization, with Qwen thinking disabled.
-# Use task="story_generation" for LitBench.
+# Use task="story_generation" for LitBench or task="translation_de_en" for WMT14.
 reference_context = make_reference_context(
     task="summarization", tokenizer=lm.tokenizer
 )
@@ -386,7 +400,8 @@ Prompt construction lives in [`rewards/prompts.py`](src/non_verifiable_rewards/r
 applies the chat template, and `task_for_dataset` maps Reddit/LitBench to tasks.
 Without a custom builder, reference likelihood, VR-CLI, and NOVER all use the
 same plain-text template: `task="summarization"` by default, or
-`task="story_generation"` for stories. Passing `None` as the candidate omits
+`task="story_generation"` for stories or `task="translation_de_en"` for WMT14.
+Passing `None` as the candidate omits
 only the example block for the VR-CLI baseline. Self-certainty keeps its own
 original-prompt conditioning; its standalone default adds a newline. The
 reference remains the scored continuation and is never included in the user message.
@@ -485,19 +500,11 @@ set `allow_truncation=True` to use the backend's native truncation, which emits 
 warning. Those are truncated-text scores, not full-story scores. Choose and
 record a long-text policy before evaluating LitBench.
 
-The convenience `load_sff()` and `load_litbench()` loaders return only `prompt`,
-`preferred`, and `rejected`. They do **not** yet supply the benchmark references
-or implement the proposed Reddit-only / three-stories-per-prompt filtering:
-
-- Reddit needs the human TL;DR from the underlying source data. The SFF loader
-  also retains news comparisons, which need filtering for this experiment.
-- LitBench needs story identities and upvote metadata to select the most
-  upvoted story outside each pair, from prompts with at least three stories.
-
-The experiment `prepare` stage implements this reference construction from the
-raw sources. When using the convenience loaders directly, prepare references
-separately before using reference-based rewards.
-Using the preferred output itself as the reference would leak the label.
+The preference loaders construct references and apply dataset-specific filters:
+SFF joins human TL;DRs, LitBench selects a third story outside the pair, and WMT14
+joins official reference translations to human-ranked system outputs. The
+experiment `prepare` stage uses these same loaders. The preferred output is
+never substituted for an independent reference.
 The reward modules score supplied outputs; the experiment package handles
 sampling, execution, and aggregation.
 

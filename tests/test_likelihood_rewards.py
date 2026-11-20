@@ -95,6 +95,7 @@ def test_vrcli_reuses_baseline_within_call_and_keys_by_reference():
             "story for the same writing prompt",
             "standalone story for the writing prompt",
         ),
+        ("translation_de_en", "English translation of the same German text", "English translation"),
     ],
 )
 def test_vrcli_task_prompt_keeps_reference_as_target(task, example, instruction):
@@ -106,7 +107,8 @@ def test_vrcli_task_prompt_keeps_reference_as_target(task, example, instruction)
     block = f"Here is an example {example}:\ncandidate\n\n"
     assert block in conditioned[0]
     assert conditioned[0].replace(block, "") == baseline[0]
-    assert conditioned[0].endswith(f"Now write a {instruction}:\n")
+    article = "the" if task == "translation_de_en" else "a"
+    assert conditioned[0].endswith(f"Now write {article} {instruction}:\n")
     assert "held-out reference" not in conditioned[0]
     assert "held-out reference" not in baseline[0]
     assert "source" in conditioned[0]
@@ -124,7 +126,7 @@ def test_likelihood_rewards_reject_unknown_task_and_accept_custom_context(cls):
     assert scorer.calls[0][0] == ["custom:input:candidate"]
 
 
-@pytest.mark.parametrize("task", ["summarization", "story_generation"])
+@pytest.mark.parametrize("task", ["summarization", "story_generation", "translation_de_en"])
 @pytest.mark.parametrize("chat", [False, True])
 def test_all_reference_rewards_send_identical_contexts_and_targets(task, chat):
     scorer = RecordingScorer()
@@ -147,7 +149,7 @@ def test_all_reference_rewards_send_identical_contexts_and_targets(task, chat):
     for candidate, context in zip(("candidate A", "candidate B"), contexts, strict=True):
         assert candidate in context and "source" in context
         assert "held-out target" not in context
-        assert ("summary" if task == "summarization" else "story") in context
+        assert {"summarization": "summary", "story_generation": "story", "translation_de_en": "English translation"}[task] in context
         if chat:
             assert context.startswith("USER:") and context.endswith("ASSISTANT:")
 
