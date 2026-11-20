@@ -17,10 +17,11 @@ from .._hashing import digest, file_sha256
 SCHEMA_VERSION = 1
 DATASETS = ("reddit_tldr", "litbench")
 SMART_REWARDS = ("smart1_bertscore", "smart1_bleurt")
-BACKENDS = ("lexical", "bertscore", "bleurt", "lm", *SMART_REWARDS)
+BACKENDS = ("lexical", "meteor", "bertscore", "bleurt", "lm", *SMART_REWARDS)
 REWARDS = (
     "rouge_l",
     "chrf_pp",
+    "meteor",
     "bertscore",
     "bleurt",
     "self_certainty",
@@ -29,10 +30,13 @@ REWARDS = (
     "nover",
     "length",
 )
-LEGACY_REWARDS = tuple(reward for reward in REWARDS if reward not in ("nover", "chrf_pp"))
+LEGACY_REWARDS = tuple(
+    reward for reward in REWARDS if reward not in ("nover", "chrf_pp", "meteor")
+)
 ALL_REWARDS = (*REWARDS, *SMART_REWARDS)
 BACKEND_REWARDS = {
     "lexical": ("rouge_l", "chrf_pp", "length"),
+    "meteor": ("meteor",),
     "bertscore": ("bertscore",),
     "bleurt": ("bleurt",),
     "smart1_bertscore": ("smart1_bertscore",),

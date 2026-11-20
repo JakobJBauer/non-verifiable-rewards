@@ -19,7 +19,7 @@ from .io import (
     write_json,
 )
 
-PILOT_REWARDS = ("rouge_l", "chrf_pp", "bertscore", "bleurt", "length")
+PILOT_REWARDS = ("rouge_l", "chrf_pp", "meteor", "bertscore", "bleurt", "length")
 
 
 def set_lm_scope(config, *, skip=False):

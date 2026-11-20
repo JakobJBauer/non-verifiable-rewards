@@ -15,6 +15,7 @@ from ..rewards import (
     CausalLMScorer,
     ChrFPlusPlusReward,
     LengthReward,
+    MeteorReward,
     NOVERReward,
     RougeLReward,
     SMART1BERTScoreReward,
@@ -67,6 +68,8 @@ class Backend:
         if name == "lexical":
             self.rouge, self.length = RougeLReward(), LengthReward()
             self.chrf = ChrFPlusPlusReward()
+        elif name == "meteor":
+            self.reward = MeteorReward(wordnet_path=models["wordnet"]["path"])
         elif name in ("bertscore", "smart1_bertscore"):
             import torch
 
@@ -210,6 +213,14 @@ class Backend:
                 side: {"sacrebleu_signature": self.chrf.signature, "beta": 2, "scale": 100}
                 for side in ("preferred", "rejected")
             }
+        elif self.name == "meteor":
+            values["meteor"] = self.reward.score(
+                [original["preferred"], original["rejected"]],
+                references=[original["reference"]] * 2,
+            )
+            details["meteor"] = {
+                side: dict(self.reward.statistics) for side in ("preferred", "rejected")
+            }
         elif self.name in ("bertscore", "bleurt"):
             values[self.name] = self.reward.score(candidates, references=references)
         elif self.name in SMART_REWARDS:
@@ -308,7 +319,7 @@ class Backend:
                     "candidate_tokens": candidate_tokens,
                 }
         native = self.native_truncation(pair)
-        uses_full_text = self.name == "lexical" or self.name in SMART_REWARDS
+        uses_full_text = self.name in ("lexical", "meteor", *SMART_REWARDS)
         rows = []
         for reward, scores in values.items():
             for index, side in enumerate(("preferred", "rejected")):
@@ -386,6 +397,8 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
     run = ensure_run(config)
     if backend == "lexical" and set(BACKEND_REWARDS[backend]) - set(run_rewards(run)):
         raise ValueError("Lexical reward set changed; choose a new run_dir for scoring")
+    if backend == "meteor" and "meteor" not in run_rewards(run):
+        raise ValueError("METEOR reward set changed; choose a new run_dir for scoring")
     if backend in SMART_REWARDS and backend not in run_rewards(run):
         raise ValueError("SMART reward set changed; choose a new run_dir for scoring")
     if backend == "lm" and set(BACKEND_REWARDS["lm"]) - set(run_rewards(run)):

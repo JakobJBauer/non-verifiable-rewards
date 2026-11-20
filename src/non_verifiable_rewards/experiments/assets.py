@@ -1,14 +1,16 @@
-"""Download immutable model snapshots and checkpoints."""
+"""Download model snapshots, checkpoints, and offline NLP resources."""
 
+import hashlib
 import json
 import logging
 import urllib.request
 import zipfile
 from pathlib import Path
 
-from .io import ensure_run, file_sha256, write_json
+from .io import ensure_run, file_sha256, run_rewards, write_json
 
 logger = logging.getLogger(__name__)
+WORDNET_ARCHIVE_SHA256 = "cbda5ea6eef7f36a97a43d4a75f85e07fccbb4f23657d27b4ccbc93e2646ab59"
 
 
 def download_file(url, target):
@@ -65,6 +67,8 @@ def download_models(config):
     }
     if config.get("include_smart_rewards", False):
         manifest["punkt"] = download_punkt(cache)
+    if "meteor" in run_rewards(run):
+        manifest["wordnet"] = download_wordnet(cache)
     write_json(manifest_path, manifest)
     return manifest
 
@@ -74,6 +78,8 @@ def model_paths(config):
     expected = {"lm", "bertscore", "bleurt"}
     if config.get("include_smart_rewards", False):
         expected.add("punkt")
+    if "meteor" in run_rewards(config["run_dir"]):
+        expected.add("wordnet")
     if set(manifest) != expected:
         raise ValueError("Run download first; the model manifest is incomplete")
     for item in manifest.values():
@@ -86,7 +92,47 @@ def model_paths(config):
         for name, checksum in spec["files_sha256"].items():
             if file_sha256(Path(spec["path"]) / name) != checksum:
                 raise ValueError("SMART sentence tokenizer changed after download")
+    if "wordnet" in manifest:
+        spec = manifest["wordnet"]
+        for name, checksum in spec["files_sha256"].items():
+            if file_sha256(Path(spec["path"]) / name) != checksum:
+                raise ValueError("METEOR WordNet corpus changed after download")
     return manifest
+
+
+def download_wordnet(cache):
+    """Freeze the English WordNet corpus from a pinned NLTK data revision."""
+    revision = "96f9b3252457a2b97e52aec64c3dfceeb5c312d5"
+    url = f"https://raw.githubusercontent.com/nltk/nltk_data/{revision}/packages/corpora/wordnet.zip"
+    archive = download_file(url, Path(cache) / "nltk" / "wordnet.zip")
+    if file_sha256(archive) != WORDNET_ARCHIVE_SHA256:
+        raise ValueError("WordNet archive checksum differs from the pinned corpus")
+    target = archive.parent / "wordnet"
+    target.mkdir(parents=True, exist_ok=True)
+    checksums = {}
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.infolist():
+            if member.is_dir():
+                continue
+            path = Path(member.filename)
+            if path.parts[0] != "wordnet" or len(path.parts) != 2 or ".." in path.parts:
+                raise ValueError("Unexpected WordNet archive path")
+            destination = target / path.name
+            data = bundle.read(member)
+            checksum = hashlib.sha256(data).hexdigest()
+            if not destination.exists():
+                destination.write_bytes(data)
+            elif file_sha256(destination) != checksum:
+                raise ValueError("METEOR WordNet corpus differs from the pinned archive")
+            checksums[path.name] = checksum
+    return {
+        "id": "nltk-wordnet-english",
+        "url": url,
+        "revision": revision,
+        "archive_sha256": file_sha256(archive),
+        "files_sha256": checksums,
+        "path": str(target),
+    }
 
 
 def download_punkt(cache):

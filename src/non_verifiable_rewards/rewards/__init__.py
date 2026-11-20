@@ -6,6 +6,7 @@ from .bleurt import BLEURTReward
 from .causal_lm import CausalLMScorer
 from .chrf import ChrFPlusPlusReward
 from .length import LengthReward
+from .meteor import MeteorReward
 from .nover import NOVERReward
 from .reference_likelihood import ReferenceLikelihoodReward
 from .rouge_l import RougeLReward
@@ -19,6 +20,7 @@ __all__ = [
     "CausalLMScorer",
     "ChrFPlusPlusReward",
     "LengthReward",
+    "MeteorReward",
     "NOVERReward",
     "ReferenceLikelihoodReward",
     "Reward",

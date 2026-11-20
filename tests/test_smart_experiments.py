@@ -110,6 +110,8 @@ def test_punkt_asset_download_is_cached_and_tampering_is_detected(
     manifest["punkt"] = punkt
     write_json(tmp_path / "models.json", manifest)
     config = {"run_dir": str(tmp_path), "include_smart_rewards": True}
+    # This legacy manifest predates the METEOR/WordNet resource.
+    write_json(tmp_path / "environment.json", {"rewards": [r for r in ALL_REWARDS if r != "meteor"]})
     assert assets.model_paths(config) == manifest
     (Path(punkt["path"]) / files[0]).write_text("changed")
     with pytest.raises(ValueError, match="tokenizer changed"):

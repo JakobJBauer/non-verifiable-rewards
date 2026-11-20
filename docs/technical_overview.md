@@ -7,8 +7,8 @@ task-specific summary/story prompts shared by reference likelihood and NOVER.
 The scoring-source hash therefore
 differs from the recorded GPU workers, and saved results remain historical.
 
-The current project evaluates **eight rewards plus a length baseline** by default,
-including the NOVER proxy and chrF++ added after that run, on pre-existing
+The current project evaluates **nine rewards plus a length baseline** by default,
+including the NOVER proxy, chrF++, and METEOR added after that run, on pre-existing
 preference pairs. It performs inference, comparison, and statistical analysis.
 There is no policy training, optimizer, GRPO implementation, generated rollout
 collection, LLM judge, or self-play in the current experiment.
@@ -43,7 +43,7 @@ rule for measuring their agreement; that is not implemented here.
 flowchart LR
     A[Raw comparisons and reference sources] --> B[Filter, build references, sample]
     B --> C[Frozen full-text pairs]
-    C --> D[ROUGE-L, chrF++ and length]
+    C --> D[ROUGE-L, chrF++, METEOR and length]
     C --> E[Save prepared neural text]
     E --> F[BERTScore, BLEURT, Qwen rewards]
     D --> G[Resumable score journals]
@@ -199,7 +199,7 @@ or model weights; neural metrics initialize lazily and reuse their models.
 | VR-CLI | Prompt, candidate, reference, plus a no-candidate baseline | Same Qwen3-4B |
 | Length | Candidate | Whitespace-separated word count |
 
-ROUGE-L, chrF++, BERTScore, and BLEURT do not see the source prompt/post. Their evidence
+ROUGE-L, chrF++, METEOR, BERTScore, and BLEURT do not see the source prompt/post. Their evidence
 about correctness comes through the reference. Self-certainty is reference-free
 at scoring time, but it is evaluated on the same reference-eligible sample as
 the other methods.
@@ -242,6 +242,39 @@ signature (including package version), beta, and scale in each row's statistics.
 Historical environments without a reward list retain their original seven
 rewards; environments listing the later eight rewards also remain readable.
 Fresh scoring requires a new run directory when the lexical reward set changes.
+
+### METEOR (NLTK)
+
+Source: [`rewards/meteor.py`](../src/non_verifiable_rewards/rewards/meteor.py).
+`MeteorReward` uses [NLTK's English METEOR](https://www.nltk.org/api/nltk.translate.meteor_score.html),
+with exact, Porter-stem, and WordNet-synonym token matching. It lowercases tokens
+and uses `nltk.word_tokenize(preserve_line=True)`, without sentence splitting.
+This is the NLTK variant; it does not implement the Java release's paraphrase
+matching or tuned language/task parameter sets.
+
+For `M` aligned tokens, candidate length `m`, reference length `n`, and `C`
+contiguous alignment chunks, the score is:
+
+\[
+P=M/m,\quad R=M/n,\quad
+F=\frac{PR}{0.9P+0.1R},\quad
+\operatorname{METEOR}=F\left(1-0.5(C/M)^3\right).
+\]
+
+No matches yield zero. Scores use the native 0–1 scale, with higher values
+better. Recall receives greater weight than precision, so candidate/reference
+orientation matters. The fragmentation penalty also applies to exact matches:
+one matching token scores 0.5; three contiguous matching tokens score about
+0.9815. Each complete text pair is one scoring unit with no truncation or
+corpus aggregation; scores are independent of the surrounding batch.
+
+The separate CPU `meteor` backend reads original texts and records the NLTK
+and WordNet versions, tokenizer, stemmer, parameters, and scale with each score.
+The download stage prepares English WordNet 3.0 from a pinned NLTK data commit,
+checks its archive hash, and records extracted-file hashes in `models.json`.
+Scoring runs offline and fails explicitly if the resource is missing or changed;
+it never silently drops synonym matching. New runs include METEOR by default,
+while older reward manifests remain reportable without WordNet.
 
 ## 5. BERTScore
 
@@ -711,8 +744,8 @@ their accuracy difference is not a causal estimate of truncation's effect.
 
 ## 12. Worker execution, resuming, and provenance
 
-There are four default worker backends: `lexical` produces ROUGE-L, chrF++, and length;
-`bertscore` and `bleurt` each produce one reward; `lm` produces all four Qwen
+There are five default worker backends: `lexical` produces ROUGE-L, chrF++, and length;
+`meteor`, `bertscore`, and `bleurt` each produce one reward; `lm` produces all four Qwen
 rewards. Models are loaded only when a worker finds pending pairs and are
 reused across both datasets.
 

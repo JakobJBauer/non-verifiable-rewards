@@ -103,10 +103,12 @@ persistent `run_dir`. The original directory is resumable and skips scores
 already completed; it does not rerun all scoring merely because it is launched
 again.
 
-The launcher prepares data, resolves immutable model revisions, preprocesses
-texts, runs lexical scoring alongside Qwen, then runs BERTScore and BLEURT on
-the GPU sequentially. It creates the report after all workers finish. A failed
-backend is logged while other backends are still attempted. Missing or failed
+The launcher prepares data, resolves immutable model revisions, downloads the
+pinned English WordNet corpus, and preprocesses texts. It starts lexical scoring
+in the background, runs METEOR on CPU, then runs Qwen, BERTScore, and BLEURT on
+the GPU sequentially. New metric sets require a new run directory; historical
+reports retain their recorded scope. It creates the report after all workers
+finish. A failed backend is logged while other backends are still attempted. Missing or failed
 scores are never fabricated; coverage and failures must be inspected.
 
 For the initial run, the prepared 2,000-pair samples were transferred from the

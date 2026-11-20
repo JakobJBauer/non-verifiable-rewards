@@ -64,6 +64,15 @@ retain the other metrics' historical definitions. Scores, source hashes, setting
 and a reproduction script are saved in `outputs/chrf_pp_20261120/`; original
 artifacts are unchanged.
 
+METEOR (NLTK) reaches **57.33% on Reddit and 52.85% on LitBench** on the same
+2,000 pairs per dataset. Its margin correlations with chrF++ are 0.778 and
+0.913 respectively; on LitBench it also correlates strongly with length (0.814).
+The [accuracy table](outputs/meteor_20261120/summary.csv) and
+[correlations and decision agreement](outputs/meteor_20261120/meteor_comparisons.csv)
+compare all ten metrics. Scores, corpus checksums, source hashes, and a
+reproduction script are saved in `outputs/meteor_20261120/`; earlier artifacts
+are unchanged and retain their historical metric definitions.
+
 ## Run the experiments
 
 The experiment package loads reference-bearing pairs, freezes a seeded sample,
@@ -108,6 +117,7 @@ The stages can also be run independently:
 .venv/bin/python -m non_verifiable_rewards.experiments download --config configs/local_cpu.toml
 .venv/bin/python -m non_verifiable_rewards.experiments preprocess --config configs/local_cpu.toml
 .venv/bin/python -m non_verifiable_rewards.experiments score --config configs/local_cpu.toml --backend lexical
+.venv/bin/python -m non_verifiable_rewards.experiments score --config configs/local_cpu.toml --backend meteor
 .venv/bin/python -m non_verifiable_rewards.experiments smoke --config configs/local_cpu.toml
 .venv/bin/python -m non_verifiable_rewards.experiments report --run-dir outputs/local_cpu_int8
 ```
@@ -136,7 +146,7 @@ vote ties are broken by content hash. These decisions are recorded in each pair.
 | `scores/*/*.invocation-*.json`, `logs/` | Every worker invocation, package versions, peak memory, progress, and failures |
 | `source_at_*.tar.gz`, `artifacts.json` | Source snapshots and output checksums |
 
-All nine default scores are higher-is-better; the two SMART variants are optional.
+All ten default scores are higher-is-better; the two SMART variants are optional.
 Accuracy assigns 1 to a correct preference,
 0 to an incorrect preference, and 0.5 to a tie. The report uses the common complete
 pair set for methods included in the benchmark, reports coverage and ties, and obtains paired 95% percentile intervals
@@ -145,7 +155,7 @@ levels from different reward scales are not compared. Constant rewards have an
 undefined correlation, displayed as `n/a`. Reference likelihood uses mean token
 log probability in the runner, with the sum and token count retained too.
 
-ROUGE-L, chrF++, and the word-length baseline use full texts. The local neural limits are
+ROUGE-L, chrF++, METEOR, and the word-length baseline use full texts. The local neural limits are
 384 prompt tokens and 192 tokens each for candidates and references, measured
 with the Qwen tokenizer. BERTScore/BLEURT may further truncate to their own model
 limits. Every truncation is recorded and plotted. Human preferences still refer
@@ -187,6 +197,7 @@ silently run BLEURT or Qwen on CPU. On a shared filesystem, run preparation once
 .venv/bin/python -m non_verifiable_rewards.experiments download --config configs/cluster_qwen3_4b.toml
 .venv/bin/python -m non_verifiable_rewards.experiments preprocess --config configs/cluster_qwen3_4b.toml
 .venv/bin/python -m non_verifiable_rewards.experiments score --config configs/cluster_qwen3_4b.toml --backend lexical
+.venv/bin/python -m non_verifiable_rewards.experiments score --config configs/cluster_qwen3_4b.toml --backend meteor
 sbatch scripts/score_slurm.sh
 ```
 
@@ -200,7 +211,7 @@ the Python code itself.
 ## Install
 
 ```bash
-uv sync                         # Dataset utilities, ROUGE-L, chrF++, length, and tests
+uv sync                         # Dataset utilities, ROUGE-L, chrF++, METEOR, length, tests
 uv sync --extra bertscore       # BERTScore encoder
 uv sync --extra lm              # Self-certainty, reference likelihood, VR-CLI, NOVER proxy
 uv sync --extra bleurt          # Official BLEURT TensorFlow implementation
@@ -215,6 +226,8 @@ Choose the appropriate PyTorch build for your CPU/CUDA environment.
 Importing reward modules does not load PyTorch, TensorFlow, Transformers, or any
 model weights. BERTScore and BLEURT load on their first nonempty scoring call.
 The causal LM is loaded explicitly and can be shared by all four LM rewards.
+METEOR loads English WordNet lazily; the experiment `download` step prepares
+its pinned corpus for offline scoring. Standalone usage is shown below.
 
 For long texts, the two [SMART-1 rewards](docs/smart_rewards.md) aggregate sentence
 matches without truncating the text. Enable them in experiments with
@@ -239,6 +252,7 @@ lengths, and empty references raise errors.
 | --- | --- | --- |
 | `RougeLReward` / `rouge_l.py` | ROUGE-L F1, with stemming by default | references |
 | `ChrFPlusPlusReward` / `chrf.py` | Sentence-level chrF++ F2 on SacreBLEU's 0–100 scale | references |
+| `MeteorReward` / `meteor.py` | NLTK English METEOR with stems and WordNet synonyms, on a 0–1 scale | references |
 | `BERTScoreReward` / `bertscore.py` | BERTScore F1; `roberta-large`, no IDF or baseline rescaling by default | references |
 | `BLEURTReward` / `bleurt.py` | Raw learned regression score; not restricted to [0, 1] | references |
 | `SMART1BERTScoreReward` / `smart.py` | Reference-only SMART-1 F1 with BERTScore sentence matches; full text coverage | references |
@@ -278,6 +292,33 @@ references are rejected. The lexical worker records the SacreBLEU signature,
 beta, and scale for reproducibility. This adds a CPU metric without model downloads.
 Historical reports retain their recorded metric scope; use a new run directory
 to score the expanded lexical backend.
+
+METEOR uses NLTK's English implementation with lowercase preprocessing, Porter
+stemming, WordNet synonyms, and `alpha=0.9`, `beta=3`, `gamma=0.5`. It tokenizes
+with `nltk.word_tokenize(preserve_line=True)`, so no Punkt resource is needed.
+Each full candidate/reference pair is scored independently, without sentence
+splitting or truncation. The fragmentation penalty remains active even for
+exact matches: a one-token match scores 0.5, and three matching tokens score
+about 0.9815. This implementation is labelled **METEOR (NLTK)** in reports;
+it does not include the Java release's paraphrase tables.
+
+For standalone CPU scoring, download the same pinned WordNet corpus once:
+
+```python
+from non_verifiable_rewards.experiments.assets import download_wordnet
+from non_verifiable_rewards.rewards import MeteorReward
+
+wordnet = download_wordnet("artifacts/cache")  # Run once with network access.
+meteor = MeteorReward(wordnet_path=wordnet["path"])
+meteor_scores = meteor.score(**batch)
+```
+
+Alternatively, `MeteorReward()` uses an already installed NLTK `wordnet` corpus.
+Scoring never downloads resources or disables synonyms when WordNet is missing.
+New benchmarks include a separate CPU `meteor` backend; `models.json` records
+the corpus revision and checksums, and each score records versions and settings.
+Use a new run directory for the expanded metric set; historical reports retain
+their recorded scope.
 
 Report tie rates along with accuracy. Continuous VR-CLI removes threshold-induced
 ties; identical scores and the numerical tie tolerance can still produce ties.

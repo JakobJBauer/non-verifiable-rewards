@@ -367,7 +367,7 @@ def legacy_run(synthetic_run):
         records = read_jsonl(path)
         for record in records:
             record["rows"] = [
-                row for row in record["rows"] if row["reward"] not in ("nover", "chrf_pp")
+                row for row in record["rows"] if row["reward"] not in ("nover", "chrf_pp", "meteor")
             ]
             for row in record["rows"]:
                 if row["reward"] == "reference_likelihood":
@@ -388,6 +388,7 @@ def test_legacy_reporting_and_smoke_remain_readable_but_new_runs_require_nover(l
     assert result["rewards"] == LEGACY_REWARDS
     assert "nover" not in set(result["coverage"].reward)
     assert "chrf_pp" not in set(result["coverage"].reward)
+    assert "meteor" not in set(result["coverage"].reward)
     record = read_jsonl(run / "scores" / "lm" / "reddit_tldr-shard-00000-of-00001.jsonl")[0]
     write_json(run / "qwen_smoke_check.json", {"validation": record})
     assert smoke_check(legacy_run)["validation"] == record
@@ -395,6 +396,8 @@ def test_legacy_reporting_and_smoke_remain_readable_but_new_runs_require_nover(l
         score(legacy_run, "lm")
     with pytest.raises(ValueError, match="Lexical reward set changed"):
         score(legacy_run, "lexical")
+    with pytest.raises(ValueError, match="METEOR reward set changed"):
+        score(legacy_run, "meteor")
     write_json(run / "environment.json", {"rewards": REWARDS})
     with pytest.raises(ValueError, match="missing"):
         analyze(legacy_run)
@@ -402,22 +405,25 @@ def test_legacy_reporting_and_smoke_remain_readable_but_new_runs_require_nover(l
         smoke_check(legacy_run)
 
 
-def test_pre_chrf_manifest_preserves_scope_but_new_runs_require_chrf(synthetic_run):
+@pytest.mark.parametrize("new_reward,backend", [("chrf_pp", "lexical"), ("meteor", "meteor")])
+def test_historical_manifest_preserves_scope_but_new_runs_require_new_reward(
+    synthetic_run, new_reward, backend
+):
     run = Path(synthetic_run["run_dir"])
-    for path in (run / "scores" / "lexical").glob("*.jsonl"):
+    for path in (run / "scores" / backend).glob("*.jsonl"):
         records = read_jsonl(path)
         for record in records:
-            record["rows"] = [row for row in record["rows"] if row["reward"] != "chrf_pp"]
+            record["rows"] = [row for row in record["rows"] if row["reward"] != new_reward]
         write_jsonl(path, records)
     with pytest.raises(ValueError, match="missing"):
         analyze(synthetic_run)
-    historical = tuple(reward for reward in REWARDS if reward != "chrf_pp")
+    historical = tuple(reward for reward in REWARDS if reward != new_reward)
     write_json(run / "environment.json", {"rewards": historical})
     assert analyze(synthetic_run)["rewards"] == historical
     # Applying the local smoke-only scope must not demand a missing new metric.
     write_json(run / "config.json", synthetic_run)
     set_lm_scope(synthetic_run)
-    assert set(analyze(synthetic_run)["rewards"]) == set(PILOT_REWARDS) - {"chrf_pp"}
+    assert set(analyze(synthetic_run)["rewards"]) == set(PILOT_REWARDS) - {new_reward}
 
 
 def test_legacy_smoke_without_completed_pair_requires_new_run(legacy_run, monkeypatch):

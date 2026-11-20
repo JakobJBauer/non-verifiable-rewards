@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 LABELS = {
     "rouge_l": "ROUGE-L",
     "chrf_pp": "chrF++",
+    "meteor": "METEOR (NLTK)",
     "bertscore": "BERTScore",
     "bleurt": "BLEURT",
     "smart1_bertscore": "SMART-1 BERTScore",
@@ -37,7 +38,7 @@ COLORS = dict(
     zip(
         REWARDS,
         (
-            "#4477AA", "#66CCEE", "#228833", "#AA3377", "#AA8800",
+            "#4477AA", "#66CCEE", "#DDCC77", "#228833", "#AA3377", "#AA8800",
             "#EE7733", "#0099BB", "#8855AA", "#777777",
         ),
         strict=True,
@@ -52,7 +53,7 @@ def caption(config):
     if "reference_likelihood" not in config.get("report_rewards", REWARDS):
         text += " (Qwen: smoke check only)"
     if config["pilot"]:
-        text += "\nBase neural scores use capped text; SMART and lexical rewards use full outputs. Pipeline validation only."
+        text += "\nBase neural scores use capped text; SMART, METEOR and lexical rewards use full outputs. Pipeline validation only."
     else:
         text += "\nEncoder metrics may truncate; see coverage. Confidence intervals resample prompts."
     return text
@@ -470,6 +471,9 @@ def runtime_figure(result, config):
     labels = [lexical_label, "BERTScore", "BLEURT", lm_label]
     if "reference_likelihood" not in result["rewards"]:
         order, labels = order[:-1], labels[:-1]
+    if "meteor" in result["rewards"]:
+        order.insert(1, "meteor")
+        labels.insert(1, LABELS["meteor"])
     for reward in ("smart1_bertscore", "smart1_bleurt"):
         if reward in result["rewards"]:
             order.append(reward)
@@ -590,6 +594,14 @@ def write_reports(result, config):
             "case-sensitive, no character whitespace, and effective-order averaging. "
             "Each candidate is scored separately on the native 0–100 scale. "
             "The SacreBLEU settings/version signature is saved with every score."
+        )
+    if "meteor" in result["rewards"]:
+        notes.append(
+            "METEOR uses NLTK's English implementation on complete texts with "
+            "lowercasing, Porter stemming, WordNet synonyms, and alpha=0.9, beta=3, gamma=0.5. "
+            "The tokenizer is nltk.word_tokenize(preserve_line=True); scores are per text pair on a 0–1 scale. "
+            "This is NLTK METEOR, not the Java release with paraphrase tables. "
+            "WordNet checksums are recorded in models.json, and NLTK/WordNet versions in each score."
         )
     if (run / "derivation.json").exists():
         notes.append(
