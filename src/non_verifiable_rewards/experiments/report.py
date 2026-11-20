@@ -560,6 +560,21 @@ def markdown_table(frame):
     return "\n".join(lines)
 
 
+def comparison_table(summary):
+    """Place task accuracies side by side; keep detailed paired tests separate."""
+    import pandas as pd
+
+    rows = []
+    for reward, frame in summary.groupby("reward", sort=False):
+        row = {"Reward": LABELS[reward]}
+        for item in frame.itertuples():
+            row[DATASET_LABELS[item.dataset]] = (
+                f"{item.accuracy:.1%} [{item.ci_low:.1%}, {item.ci_high:.1%}]"
+            )
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def write_reports(result, config):
     run = Path(config["run_dir"])
     models = json.loads((run / "models.json").read_text())
@@ -767,7 +782,8 @@ def write_reports(result, config):
     if (companion / "tables" / "summary.parquet").exists():
         import pandas as pd
 
-        matched = display_summary(pd.read_parquet(companion / "tables" / "summary.parquet"))
+        matched_summary = pd.read_parquet(companion / "tables" / "summary.parquet")
+        matched = display_summary(matched_summary)
         explanation = (
             "Only SMART-BLEURT is limited to 100 pairs per dataset. The twelve "
             "other metrics retain their 2,000-pair estimates above. This additional "
@@ -783,8 +799,10 @@ def write_reports(result, config):
         companion_html = (
             '<section id="smart-bleurt"><h2>SMART-BLEURT: matched 100-pair comparison</h2>'
             + '<p>' + html.escape(explanation) + '</p><div class="scroll">'
+            + comparison_table(matched_summary).to_html(index=False, border=0, escape=True)
+            + '</div><details><summary>Pair counts, ties and paired differences from length</summary><div class="scroll">'
             + matched.to_html(index=False, border=0, escape=True)
-            + '</div><p><a href="smart_bleurt_subset/report.html">Full matched comparison, figures and diagnostics</a></p></section>'
+            + '</div></details><p><a href="smart_bleurt_subset/report.html">Full matched comparison, figures and diagnostics</a></p></section>'
         )
     for stem, title in figures:
         markdown += f"\n\n## {title}\n\n![{title}](figures/{stem}.png)\n\n[PDF](figures/{stem}.pdf)\n"
@@ -817,14 +835,17 @@ def write_reports(result, config):
     document = "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
     document += f"<title>{html.escape(config['name'])}</title><style>body{{font:16px/1.55 system-ui,sans-serif;background:#f4f6f8;color:#182333;margin:0}}main{{max-width:1200px;margin:auto;padding:36px}}h1{{font-size:32px}}h2{{margin-top:30px}}section,.notes,details{{background:white;padding:22px;border:1px solid #dce2e8;border-radius:8px;margin:20px 0}}img{{width:100%;height:auto}}table{{border-collapse:collapse;width:100%;font-size:14px}}th,td{{border-bottom:1px solid #ddd;padding:9px;text-align:left}}th{{background:#eaf0f5}}pre{{white-space:pre-wrap;font:14px/1.5 system-ui}}summary{{cursor:pointer;font-weight:600}}.scroll{{overflow-x:auto}}li{{margin:8px 0}}</style><main><h1>{html.escape(config['name'])}</h1><p>{html.escape(model_description)}</p>"
     document += (
-        "<div class='notes'><h2>Protocol and interpretation</h2><ul>"
+        ("<p>" + html.escape(scope_reason) + "</p>" if scope_reason else "")
+        + "<details class='notes'><summary>Protocol and interpretation</summary><ul>"
         + "".join("<li>" + html.escape(note) + "</li>" for note in notes)
-        + "</ul></div>"
+        + "</ul></details>"
     )
     document += (
-        "<section><h2>Results</h2><div class='scroll'>"
+        "<section><h2>Results</h2><p>Preference accuracy with 95% prompt-bootstrap intervals.</p><div class='scroll'>"
+        + comparison_table(result["summary"]).to_html(index=False, border=0, escape=True)
+        + "</div><details><summary>Pair counts, ties and paired differences from length</summary><div class='scroll'>"
         + display.to_html(index=False, border=0, escape=True)
-        + "</div><ul>"
+        + "</div></details><ul>"
         + "".join("<li>" + html.escape(finding) + "</li>" for finding in findings)
         + "</ul></section>"
     )
