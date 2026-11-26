@@ -38,6 +38,9 @@ training = [
     "trl==1.18.2",
     "peft==0.22.0",
 ]
+vllm = [
+    "vllm==0.23.0; sys_platform == 'linux'",
+]
 bleurt = [
     "bleurt @ git+https://github.com/google-research/bleurt.git@cebe7e6f996b40910cfaa520a63db47807e3bf5c",
 ]

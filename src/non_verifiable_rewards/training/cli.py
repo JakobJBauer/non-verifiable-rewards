@@ -77,6 +77,7 @@ def main(argv=None):
                 {
                     "output_dir": config["output_dir"],
                     "policy": config["policy"],
+                    "inference": config["inference"],
                     "runs": runs,
                     "optimization": config["optimization"],
                     "data": config["data"],

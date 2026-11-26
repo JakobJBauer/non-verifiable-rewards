@@ -8,7 +8,7 @@ WMT14 training prompts. Runs can instead select individual tasks or combine
 rewards. No full training sweep is started by installing or inspecting the code.
 
 ```bash
-uv sync --extra training --extra bertscore --extra benchmark
+uv sync --extra training --extra vllm --extra bertscore --extra benchmark
 python -m non_verifiable_rewards.training plan --config configs/grpo_qwen3_4b.toml
 # Configure the separate BLEURT interpreter below before running all rewards.
 python -m non_verifiable_rewards.training run --config configs/grpo_qwen3_4b.toml
@@ -21,6 +21,10 @@ then trains, saves and benchmarks each selected model before writing
 `--run` for a subset. Every run starts independently from the base model, never
 from the previous run's trained weights. The launcher is deliberately one
 process/GPU at a time; do not wrap it in `torchrun` or `accelerate launch`.
+
+See [PyTorch/vLLM switching](vllm_inference.md) for GPU inference, setup,
+weight synchronization, and parity/memory validation. CUDA sweeps now default
+to vLLM; use `inference.backend = "transformers"` for the original backend.
 
 ## Configuration
 

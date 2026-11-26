@@ -36,7 +36,11 @@ def main():
 
     config = json.loads(Path(args.sweep).read_text())["config"]
     factory = RewardFactory(config)
-    output = sys.stdout
+    # vLLM subprocesses/native code inherit file descriptors, not Python's
+    # redirect_stdout. Keep the response pipe private and send all engine logs
+    # to stderr, including logs produced by spawned engine workers.
+    output = os.fdopen(os.dup(sys.stdout.fileno()), "w", buffering=1)
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
     for line in sys.stdin:
         try:
             request = json.loads(line)
@@ -56,6 +60,8 @@ def main():
             response = {"error": f"{type(error).__name__}: {error}"}
         output.write(json.dumps(response, allow_nan=False) + "\n")
         output.flush()
+    if hasattr(factory.scorer, "close"):
+        factory.scorer.close()
 
 
 if __name__ == "__main__":

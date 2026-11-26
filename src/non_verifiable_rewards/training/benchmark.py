@@ -1,18 +1,16 @@
 """Generated-output evaluation and policy agreement with held-out preferences."""
 
-import gc
 import json
 from pathlib import Path
 import time
 
 from .._hashing import file_sha256
 from ..experiments.io import Journal, read_jsonl, write_json
-from ..rewards import CausalLMScorer
+from ..inference.policy import policy_backend
 from .assets import policy_path
 from .data import render_prompt
 from .rewards import RewardClient
 from .state import ensure_sweep, verify_data, verify_model
-from .train import load_policy, load_tokenizer
 
 
 def evaluation_dir(config, name):
@@ -39,6 +37,7 @@ def benchmark_identity(config, name):
         "data": manifest["files"],
         "benchmark": config["benchmark"],
         "policy": config["policy"],
+        "inference": config["inference"],
     }
     path = target / "identity.json"
     if path.exists() and json.loads(path.read_text()) != identity:
@@ -56,18 +55,17 @@ def generate(config, name):
     target, path = benchmark_identity(config, name)
     if (target / "policy_complete.json").exists():
         return verify_policy_outputs(target)
-    tokenizer = load_tokenizer(path)
     torch.set_num_threads(config["reward_models"]["threads"])
-    model = load_policy(config, path).to(config["policy"]["device"])
-    model.requires_grad_(False)
-    model.eval()
-    scorer = CausalLMScorer(
-        model, tokenizer, batch_size=config["reward_models"]["lm_batch_size"]
-    )
+    set_seed(config["seed"])
+    with policy_backend(config, path) as scorer:
+        return _generate(config, target, scorer)
+
+
+def _generate(config, target, scorer):
+    tokenizer = scorer.tokenizer
     root = Path(config["output_dir"])
     bench = config["benchmark"]
-    set_seed(config["seed"])
-    eos = model.generation_config.eos_token_id
+    eos = scorer.generation_config.eos_token_id
     eos_ids = {eos} if isinstance(eos, int) else set(eos or [tokenizer.eos_token_id])
     expected_generations, expected_pairs = set(), set()
     with (
@@ -76,47 +74,49 @@ def generate(config, name):
     ):
         for dataset in config["data"]["datasets"]:
             rows = read_jsonl(root / "data" / f"{dataset}-generation.jsonl")
-            for row in rows:
-                key = sample_key(row)
-                expected_generations.add(key)
-                if key in outputs.completed:
-                    continue
-                text = render_prompt(
-                    tokenizer, row, config["policy"]["enable_thinking"]
-                )
-                inputs = tokenizer(
-                    text, add_special_tokens=False, return_tensors="pt"
-                ).to(model.device)
-                length = inputs.input_ids.shape[1]
-                if length > config["data"]["max_prompt_tokens"]:
+            expected_generations.update(sample_key(row) for row in rows)
+            pending = [row for row in rows if sample_key(row) not in outputs.completed]
+            batch_size = config["inference"]["batch_size"]
+            for start_index in range(0, len(pending), batch_size):
+                batch = pending[start_index : start_index + batch_size]
+                prompts = [
+                    tokenizer.encode(
+                        render_prompt(
+                            tokenizer, row, config["policy"]["enable_thinking"]
+                        ),
+                        add_special_tokens=False,
+                    )
+                    for row in batch
+                ]
+                if any(
+                    len(ids) > config["data"]["max_prompt_tokens"] for ids in prompts
+                ):
                     raise ValueError(
-                        f"Held-out prompt {key} exceeds max_prompt_tokens; no silent truncation"
+                        "Held-out prompt exceeds max_prompt_tokens; no silent truncation"
                     )
                 start = time.perf_counter()
-                with torch.inference_mode():
-                    ids = model.generate(
-                        **inputs,
-                        max_new_tokens=bench["max_new_tokens"],
-                        do_sample=False,
-                        pad_token_id=tokenizer.pad_token_id,
-                        use_cache=True,
-                    )[0, length:].tolist()
-                completion = tokenizer.decode(ids, skip_special_tokens=True)
-                outputs.append(
-                    {
-                        "pair_id": key,
-                        "dataset": dataset,
-                        "prompt_id": row["prompt_id"],
-                        "completion": completion,
-                        "token_ids": ids,
-                        "tokens": len(ids),
-                        "words": len(completion.split()),
-                        "empty": not completion.strip(),
-                        "reached_token_limit": len(ids) == bench["max_new_tokens"]
-                        and (not ids or ids[-1] not in eos_ids),
-                        "seconds": time.perf_counter() - start,
-                    }
+                completions = scorer.generate_ids(
+                    prompts, max_new_tokens=bench["max_new_tokens"]
                 )
+                seconds = (time.perf_counter() - start) / len(batch)
+                for row, ids in zip(batch, completions, strict=True):
+                    key = sample_key(row)
+                    completion = tokenizer.decode(ids, skip_special_tokens=True)
+                    outputs.append(
+                        {
+                            "pair_id": key,
+                            "dataset": dataset,
+                            "prompt_id": row["prompt_id"],
+                            "completion": completion,
+                            "token_ids": ids,
+                            "tokens": len(ids),
+                            "words": len(completion.split()),
+                            "empty": not completion.strip(),
+                            "reached_token_limit": len(ids) == bench["max_new_tokens"]
+                            and (not ids or ids[-1] not in eos_ids),
+                            "seconds": seconds,
+                        }
+                    )
             for row in read_jsonl(root / "data" / f"{dataset}-pairs.jsonl"):
                 key = dataset + ":" + row["pair_id"]
                 expected_pairs.add(key)
@@ -164,10 +164,6 @@ def generate(config, name):
             "preference_protocol": "Teacher-forced candidate likelihood, mean and sum, no EOS scored; ties count half",
         },
     )
-    del scorer, model
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     return verify_policy_outputs(target)
 
 

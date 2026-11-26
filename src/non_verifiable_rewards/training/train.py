@@ -2,9 +2,11 @@
 
 import json
 import math
+from contextlib import nullcontext
 from pathlib import Path
 
 from ..experiments.io import write_json
+from ..inference import configure_vllm, grpo_inference_options, use_vllm
 from .assets import policy_path
 from .data import training_dataset
 from .rewards import RewardClient, WeightedReward
@@ -60,6 +62,8 @@ def load_policy(config, path):
 
 
 def train_run(config, run):
+    if use_vllm(config):
+        configure_vllm()
     import torch
     from transformers import set_seed
     from transformers.trainer_utils import get_last_checkpoint
@@ -156,7 +160,7 @@ def train_run(config, run):
             scale_rewards="group",
             num_iterations=1,
             optim="adamw_torch",
-            use_vllm=False,
+            **grpo_inference_options(config),
             use_cpu=policy["device"] == "cpu",
             bf16=policy["dtype"] == "bfloat16",
             fp16=policy["dtype"] == "float16",
@@ -179,15 +183,28 @@ def train_run(config, run):
                 target / "reward_trace.jsonl",
                 invalid_score=config["reward_models"]["invalid_score"],
             )
-            trainer = GRPOTrainer(
-                model=model,
-                args=args,
-                train_dataset=dataset,
-                processing_class=tokenizer,
-                reward_funcs=[callback],
-                peft_config=peft_config,
-            )
-            result = trainer.train(resume_from_checkpoint=resume)
+            if args.use_vllm:
+                from ..inference.training import engine_dtype
+
+            with engine_dtype(policy["dtype"]) if args.use_vllm else nullcontext():
+                trainer = GRPOTrainer(
+                    model=model,
+                    args=args,
+                    train_dataset=dataset,
+                    processing_class=tokenizer,
+                    reward_funcs=[callback],
+                    peft_config=peft_config,
+                )
+            switch = None
+            if args.use_vllm:
+                from ..inference.training import TrainingSwitch
+
+                switch = TrainingSwitch(trainer, target / "inference_trace.jsonl")
+            try:
+                result = trainer.train(resume_from_checkpoint=resume)
+            finally:
+                if switch is not None:
+                    switch.close()
             if trainer.state.global_step != opt["max_steps"]:
                 raise RuntimeError(
                     "Training did not reach the requested number of optimizer steps"

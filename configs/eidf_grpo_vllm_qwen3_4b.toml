@@ -1,0 +1,14 @@
+# Fresh sweep: all thirteen default reward runs, one at a time.
+# Set --run rouge_l (etc.) to select a subset. Install with bootstrap_vllm_eidf.sh.
+output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_vllm_qwen3_4b"
+cache_dir = "/root/.cache/non-verifiable-rewards"
+
+[inference]
+backend = "vllm"
+gpu_memory_utilization = 0.35
+reward_gpu_memory_utilization = 0.35
+batch_size = 16
+
+[reward_models]
+python = "/root/nvr-vllm-venv/bin/python"
+bleurt_python = "/root/nvr-bleurt-venv/bin/python"

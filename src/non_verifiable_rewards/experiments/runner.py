@@ -53,6 +53,7 @@ def scoring_code_digest():
     package = Path(__file__).resolve().parents[1]
     paths = [
         *package.glob("rewards/*.py"),
+        *package.glob("inference/*.py"),
         Path(__file__),
         Path(__file__).with_name("data.py"),
         Path(__file__).with_name("io.py"),
@@ -123,18 +124,31 @@ class Backend:
             torch.set_num_threads(config["threads"])
             if config["device"] == "cuda" and not torch.cuda.is_available():
                 raise RuntimeError("CUDA was requested but no GPU is visible")
-            self.scorer = CausalLMScorer.from_pretrained(
-                models[name]["path"],
-                device=config["device"],
-                batch_size=config["lm_batch_size"],
-                max_length=config["max_context_tokens"],
-                model_kwargs={
-                    "dtype": getattr(torch, config["dtype"]),
-                    "local_files_only": True,
-                    "attn_implementation": "sdpa",
-                },
-                tokenizer_kwargs={"local_files_only": True},
-            )
+            if config.get("lm_backend", "transformers") == "vllm":
+                from ..inference.scorer import VLLMScorer
+
+                self.scorer = VLLMScorer(
+                    models[name]["path"],
+                    dtype=config["dtype"],
+                    max_length=config["max_context_tokens"],
+                    batch_size=config["lm_batch_size"],
+                    gpu_memory_utilization=config.get(
+                        "vllm_gpu_memory_utilization", 0.35
+                    ),
+                )
+            else:
+                self.scorer = CausalLMScorer.from_pretrained(
+                    models[name]["path"],
+                    device=config["device"],
+                    batch_size=config["lm_batch_size"],
+                    max_length=config["max_context_tokens"],
+                    model_kwargs={
+                        "dtype": getattr(torch, config["dtype"]),
+                        "local_files_only": True,
+                        "attn_implementation": "sdpa",
+                    },
+                    tokenizer_kwargs={"local_files_only": True},
+                )
             if config.get("cpu_dynamic_int8", False):
                 if config["device"] != "cpu":
                     raise ValueError("cpu_dynamic_int8 requires the CPU device")
@@ -574,6 +588,9 @@ def score(config, backend, *, dataset=None, shard_index=0, num_shards=1):
         )
         logging.getLogger().removeHandler(handler)
         handler.close()
+        scorer = getattr(engine, "scorer", None)
+        if hasattr(scorer, "close"):
+            scorer.close()
     if errors:
         raise RuntimeError(
             f"{errors} failed pairs are preserved in {directory}; inspect logs"

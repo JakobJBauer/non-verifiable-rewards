@@ -33,7 +33,9 @@ REWARDS = (
     "length",
 )
 LEGACY_REWARDS = tuple(
-    reward for reward in REWARDS if reward not in ("nover", "chrf_pp", "meteor", "llm_judge")
+    reward
+    for reward in REWARDS
+    if reward not in ("nover", "chrf_pp", "meteor", "llm_judge")
 )
 ALL_REWARDS = (*REWARDS, *SMART_REWARDS)
 BACKEND_REWARDS = {
@@ -156,6 +158,18 @@ def load_config(path):
         raise ValueError("device must be cpu or cuda")
     if not isinstance(config.get("bleurt_tf32", True), bool):
         raise ValueError("bleurt_tf32 must be a boolean")
+    if config.get("lm_backend", "transformers") not in ("transformers", "vllm"):
+        raise ValueError("lm_backend must be transformers or vllm")
+    if config.get("lm_backend") == "vllm":
+        if config["device"] != "cuda" or config.get("cpu_dynamic_int8", False):
+            raise ValueError("vllm requires CUDA without CPU quantization")
+        budget = config.get("vllm_gpu_memory_utilization", 0.35)
+        if (
+            isinstance(budget, bool)
+            or not isinstance(budget, (int, float))
+            or not 0 < budget < 1
+        ):
+            raise ValueError("vllm_gpu_memory_utilization must be between 0 and 1")
     configured_rewards(config)
     configured_datasets(config)
     return config

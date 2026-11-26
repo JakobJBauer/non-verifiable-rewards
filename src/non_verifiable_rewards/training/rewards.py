@@ -1,6 +1,7 @@
 """Fixed reward backends, isolated workers, and weighted GRPO callbacks."""
 
 from collections import defaultdict
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import subprocess
 import sys
 
 from ..rewards.base import checked_scores
+from ..inference import use_vllm
 from ..rewards.prompts import make_reference_context, task_for_dataset
 from ..reasoning.evaluation import parse_answer, reasoning_text
 from .assets import resolve_hf, bleurt_path, nlp_path
@@ -41,20 +43,33 @@ class RewardFactory:
                 path = resolve_hf(
                     self.config, "reward_lm", opts["lm_id"], opts["lm_revision"]
                 )
-                self.scorer = reward_api.CausalLMScorer.from_pretrained(
-                    path,
-                    device=opts["device"],
-                    batch_size=opts["lm_batch_size"],
-                    max_length=opts["max_context_tokens"],
-                    model_kwargs={
-                        "dtype": getattr(torch, opts["dtype"]),
-                        "local_files_only": True,
-                        "attn_implementation": "sdpa",
-                    },
-                    tokenizer_kwargs={"local_files_only": True},
-                )
-                self.scorer.model.requires_grad_(False)
-                self.scorer.model.eval()
+                if use_vllm(self.config, device=opts["device"]):
+                    from ..inference.scorer import VLLMScorer
+
+                    self.scorer = VLLMScorer(
+                        path,
+                        dtype=opts["dtype"],
+                        max_length=opts["max_context_tokens"],
+                        batch_size=self.config["inference"]["batch_size"],
+                        gpu_memory_utilization=self.config["inference"][
+                            "reward_gpu_memory_utilization"
+                        ],
+                    )
+                else:
+                    self.scorer = reward_api.CausalLMScorer.from_pretrained(
+                        path,
+                        device=opts["device"],
+                        batch_size=opts["lm_batch_size"],
+                        max_length=opts["max_context_tokens"],
+                        model_kwargs={
+                            "dtype": getattr(torch, opts["dtype"]),
+                            "local_files_only": True,
+                            "attn_implementation": "sdpa",
+                        },
+                        tokenizer_kwargs={"local_files_only": True},
+                    )
+                    self.scorer.model.requires_grad_(False)
+                    self.scorer.model.eval()
             task = task_for_dataset(dataset)
             builder = make_reference_context(task=task, tokenizer=self.scorer.tokenizer)
             if name == "self_certainty":
@@ -192,14 +207,23 @@ class RewardFactory:
                 groups[row["dataset"]].append(i)
         for dataset, indices in groups.items():
             reward = self.get(name, dataset)
-            scores = checked_scores(
-                reward.score(
-                    [candidates[i] for i in indices],
-                    references=[rows[i]["reference"] for i in indices],
-                    prompts=[rows[i]["prompt"] for i in indices],
-                ),
-                len(indices),
+            # VR-CLI/NOVER request several likelihoods. Keep the frozen engine
+            # awake for the whole reward instead of copying it for each call.
+            active = (
+                self.scorer.awake()
+                if name in LM_REWARDS - {"self_certainty"}
+                and hasattr(self.scorer, "awake")
+                else nullcontext()
             )
+            with active:
+                scores = checked_scores(
+                    reward.score(
+                        [candidates[i] for i in indices],
+                        references=[rows[i]["reference"] for i in indices],
+                        prompts=[rows[i]["prompt"] for i in indices],
+                    ),
+                    len(indices),
+                )
             for i, score in zip(indices, scores, strict=True):
                 values[i] = score
         return checked_scores(values, len(rows))
@@ -230,6 +254,16 @@ class RewardClient:
                 "TF_NUM_INTRAOP_THREADS": str(opts["threads"]),
                 "TF_NUM_INTEROP_THREADS": "1",
             }
+            # TRL's colocated engine sets a one-rank rendezvous in the parent.
+            # A separate frozen reward engine must create its own process group.
+            for key in (
+                "RANK",
+                "LOCAL_RANK",
+                "WORLD_SIZE",
+                "MASTER_ADDR",
+                "MASTER_PORT",
+            ):
+                env.pop(key, None)
             process = subprocess.Popen(
                 [
                     python,

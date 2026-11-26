@@ -13,6 +13,12 @@ DEFAULTS = {
     "output_dir": "outputs/grpo_qwen3_4b",
     "cache_dir": "artifacts/cache",
     "seed": 1729,
+    "inference": {
+        "backend": "auto",
+        "gpu_memory_utilization": 0.35,
+        "reward_gpu_memory_utilization": 0.35,
+        "batch_size": 16,
+    },
     "policy": {
         "id": "Qwen/Qwen3-4B",
         "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
@@ -123,8 +129,25 @@ def validate_config(raw):
     raw = copy.deepcopy(raw)
     runs = raw.pop("runs", None)
     config = _merge(DEFAULTS, raw, "sweep")
-    for section in ("policy", "data", "optimization", "reward_models", "benchmark"):
+    for section in (
+        "policy",
+        "data",
+        "optimization",
+        "reward_models",
+        "benchmark",
+        "inference",
+    ):
         config[section] = _merge(DEFAULTS[section], raw.get(section, {}), section)
+    inference = config["inference"]
+    if inference["backend"] not in ("auto", "transformers", "vllm"):
+        raise ValueError("inference.backend must be auto, transformers or vllm")
+    _positive(inference["batch_size"], "inference.batch_size")
+    for key in ("gpu_memory_utilization", "reward_gpu_memory_utilization"):
+        _finite(inference[key], key, minimum=1e-12)
+        if inference[key] >= 1:
+            raise ValueError(f"{key} must be less than 1")
+    if inference["backend"] == "vllm" and config["policy"]["device"] != "cuda":
+        raise ValueError("vllm requires policy.device=cuda")
     if (
         isinstance(config["seed"], bool)
         or not isinstance(config["seed"], int)
