@@ -357,7 +357,10 @@ The LM worker now also includes an **LLM judge** using the same configured
 Qwen3-4B checkpoint. It independently rates each candidate using a task-specific
 rubric and the reference, without seeing preference labels or the other
 candidate. The score is the probability-weighted 0–4 rating divided by four;
-Qwen thinking is disabled and no free-form critique is generated. Rating
+Judge thinking is disabled by default. Set `judge.enable_thinking = true` to
+generate a rationale before computing the rating probabilities, on either the
+PyTorch or vLLM backend. The independent `policy.enable_thinking` setting
+defaults to `true` for GRPO rollouts and policy benchmarks. Rating
 probabilities and format probability mass are saved with each score. See the
 [judge guide](docs/llm_judge.md) for the rubric, interpretation and GRPO usage.
 [`configs/eidf_judge_qwen3_4b.toml`](configs/eidf_judge_qwen3_4b.toml) selects a

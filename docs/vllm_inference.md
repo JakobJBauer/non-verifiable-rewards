@@ -17,6 +17,8 @@ batch_size = 16
 ```
 
 The integration supports one GPU/process, standard LoRA, and full fine-tuning.
+New standard sweeps default to full policy weight updates (`policy.lora = false`);
+set `policy.lora = true` to opt into LoRA.
 Full fine-tuning has substantially larger optimizer/gradient memory needs than
 LoRA; the inference budget does not bound training memory. Existing length,
 reference, EOS, chat-template, and no-truncation policies remain explicit.
@@ -52,7 +54,10 @@ scored as an explicitly requested next-token log probability, so a full-length
 sequence does not need an extra token beyond the model context window.
 
 The judge requests the five rating tokens' **full-vocabulary** log probabilities
-in one call, then applies the existing rating reduction. It does not sample a
+in one call, then applies the existing rating reduction. With
+`judge.enable_thinking = true`, a greedy rationale ending in `</think>` precedes that call; the raw
+generated token IDs condition the rating calculation. See [judge thinking](llm_judge.md#optional-thinking).
+It does not sample a
 rating or constrain/renormalize the engine's vocabulary. Reference likelihood,
 VR-CLI and NOVER use the same vLLM scorer. The frozen reward engine sleeps at
 level 1 between calls, retaining its checkpoint in CPU memory, independently
@@ -78,6 +83,12 @@ GRPO rollouts use normal kernels: vLLM 0.23's invariant mode replaces global
 PyTorch linear operators with inference-only implementations and breaks CUDA
 backward. This choice is scoped to engine construction; the independent reward
 worker retains invariant inference.
+
+Policy thinking is enabled by default, independently of the judge (disabled
+by default). `policy.enable_thinking` reaches the same chat-template call
+before either TRL generation backend and also controls held-out generation.
+Reasoning tokens remain in the policy loss and reference KL. See
+[policy and judge thinking](grpo_training.md#policy-and-judge-thinking).
 
 Greedy outputs and scores are checked across engines; BF16 attention/GEMM
 kernels can differ numerically. Greedy agreement on the validation corpus is

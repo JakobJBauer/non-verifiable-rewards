@@ -8,28 +8,7 @@ from . import use_vllm
 
 
 class TransformersPolicy(CausalLMScorer):
-    def generate_ids(self, prompts, *, max_new_tokens):
-        import torch
-
-        results = []
-        with torch.inference_mode():
-            for prompt in prompts:
-                ids = torch.tensor([prompt], device=self.model.device)
-                output = self.model.generate(
-                    input_ids=ids,
-                    attention_mask=torch.ones_like(ids),
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    repetition_penalty=1.0,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    use_cache=True,
-                )
-                results.append(output[0, len(prompt) :].tolist())
-        return results
-
-    @property
-    def generation_config(self):
-        return self.model.generation_config
+    """PyTorch implementation of the shared generation/scoring interface."""
 
 
 @contextmanager

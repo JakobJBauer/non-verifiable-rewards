@@ -42,7 +42,7 @@ class VLLMScorer(CausalLMScorer):
         self.tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
         config = AutoConfig.from_pretrained(path, local_files_only=True)
         self.max_length = min(max_length, config.max_position_embeddings)
-        self.generation_config = GenerationConfig.from_pretrained(
+        self._generation_config = GenerationConfig.from_pretrained(
             path, local_files_only=True
         )
         self._torch_scorer = None
@@ -95,15 +95,23 @@ class VLLMScorer(CausalLMScorer):
                 use_tqdm=False,
             )
 
-    def generate_ids(self, prompts, *, max_new_tokens):
+    @property
+    def generation_config(self):
+        return self._generation_config
+
+    def generate_ids(self, prompts, *, max_new_tokens, stop_token_id=None):
         from vllm import SamplingParams
 
         positive_int(max_new_tokens, "max_new_tokens")
-        for ids in prompts:
-            if not ids or len(ids) + max_new_tokens > self.max_length:
-                raise ValueError("Prompt + generation budget exceeds model context")
-        eos = self.generation_config.eos_token_id or self.tokenizer.eos_token_id
-        eos = [eos] if isinstance(eos, int) else eos
+        self._check_prompt_ids(prompts, extra_tokens=max_new_tokens)
+        if not prompts:
+            return []
+        eos = self.generation_config.eos_token_id
+        if eos is None:
+            eos = self.tokenizer.eos_token_id
+        eos = [eos] if isinstance(eos, int) else list(eos or [])
+        if stop_token_id is not None and stop_token_id not in eos:
+            eos.append(stop_token_id)
         params = SamplingParams(
             temperature=0,
             max_tokens=max_new_tokens,
@@ -167,25 +175,11 @@ class VLLMScorer(CausalLMScorer):
                     )
         return checked_scores(scores, len(contexts))
 
-    def label_logprobs(self, contexts, labels):
+    def label_logprobs_from_ids(self, encoded, labels):
         from vllm import SamplingParams
 
-        contexts, labels = (
-            text_batch(contexts, "contexts"),
-            text_batch(labels, "labels"),
-        )
-        ids = [
-            self.tokenizer.encode(label, add_special_tokens=False) for label in labels
-        ]
-        if not ids or any(len(row) != 1 for row in ids):
-            raise ValueError("Each label must encode to exactly one token")
-        ids = [row[0] for row in ids]
-        if len(set(ids)) != len(ids) or set(ids) & set(self.tokenizer.all_special_ids):
-            raise ValueError("Labels must encode to distinct, non-special tokens")
-        encoded = [
-            self._encode(context, labels[0], i)[0][:-1]
-            for i, context in enumerate(contexts)
-        ]
+        ids = self._label_ids(labels)
+        self._check_prompt_ids(encoded, extra_tokens=1)
         if not encoded:
             return []
         # No allowed_token_ids constraint: logprobs must remain normalized over

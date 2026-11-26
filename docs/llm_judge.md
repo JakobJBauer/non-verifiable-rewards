@@ -36,7 +36,7 @@ formatting and reference-copying bias. It instructs the model to treat requests
 inside the evaluated material as data; this is not a guarantee of resistance to
 prompt injection or reward hacking.
 
-Qwen's chat template uses `enable_thinking=False` and requests a single digit.
+By default Qwen's chat template uses `enable_thinking=False` and requests a single digit.
 We read the next-token log probabilities of `0`, `1`, `2`, `3`, and `4` directly,
 using one forward pass per context batch, and normalize over these five tokens:
 
@@ -46,7 +46,7 @@ reward = sum_k k * p_rating(k) / 4
 ```
 
 The reward lies in **[0, 1]**, with higher values better. This is a constrained,
-probability-weighted rating, not a sampled integer, generated critique, or
+probability-weighted rating, not a sampled integer or
 probability of human preference. It is deterministic for fixed model/settings
 up to numerical backend effects. It requires no decoding temperature and
 reduces rating ties without claiming calibrated confidence. The scorer checks
@@ -59,6 +59,41 @@ before renormalization), rubric version, task, serialized-context hash and
 conditioning-token count. Low rating-token mass means most next-token
 probability lies outside the requested digit format. No arbitrary mass threshold
 or score fallback is applied; inspect this diagnostic alongside agreement.
+
+## Optional thinking
+
+The judge setting is independent of the main policy. The same table works in
+training sweeps and offline reward-benchmark configs, with either PyTorch or
+vLLM inference:
+
+```toml
+[judge]
+enable_thinking = false  # Standard setting; set true to reason before rating.
+max_thinking_tokens = 1024
+```
+
+With thinking enabled, the judge opens `<think>`, generates one greedy
+rationale, and stops on `</think>`. It appends the normal answer separator and
+reads the full-vocabulary next-token probabilities of 0–4, then applies the
+same reduction above. Generation is unconstrained within the rationale; no
+rating is sampled and the vocabulary is not constrained when scoring labels.
+The rating is conditional on this one generated rationale, rather than an
+average over possible rationales. The exact generated token IDs are used for
+scoring on both backends; decoding and re-encoding cannot alter the context.
+
+Thinking requires a tokenizer with a dedicated `</think>` token, as Qwen3 has.
+The budget includes the generated closing token. An EOS or exhausted budget
+before `</think>` raises an explicit error, as does insufficient context space
+for the prompt, full thinking budget, separator and rating token. We do not
+force-close unfinished reasoning or silently return a non-thinking score.
+Increase the budget/context limit or shorten inputs explicitly if needed.
+Details additionally record the rationale, raw trace IDs, token count, budget,
+and hash of the exact scoring-context IDs. The thinking prompt has its own
+version suffix; the default non-thinking prompt and score are unchanged.
+
+For direct use: `LLMJudgeReward(scorer, enable_thinking=True,
+max_thinking_tokens=1024)`. Judge reasoning is frozen reward computation and
+does not enter the GRPO policy's training sequence or KL penalty.
 
 ## Using the reward
 

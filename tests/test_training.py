@@ -228,6 +228,8 @@ def tiny_sweep(tmp_path):
         "2",
         "3",
         "4",
+        "<think>",
+        "</think>",
     ]
     backend = Tokenizer(
         WordLevel({word: i for i, word in enumerate(words)}, unk_token="<unk>")
@@ -240,7 +242,8 @@ def tiny_sweep(tmp_path):
         eos_token="<eos>",
         unk_token="<unk>",
     )
-    tokenizer.chat_template = "{% for message in messages %}{{ message['role'] + ' ' + message['content'] + ' ' }}{% endfor %}{% if add_generation_prompt %}assistant {% endif %}"
+    tokenizer.add_tokens(["<think>", "</think>"])
+    tokenizer.chat_template = "{% for message in messages %}{{ message['role'] + ' ' + message['content'] + ' ' }}{% endfor %}{% if add_generation_prompt %}assistant {% if enable_thinking is defined and not enable_thinking %}<think> </think> {% endif %}{% endif %}"
     tokenizer.save_pretrained(base)
     model = Qwen3ForCausalLM(
         Qwen3Config(
@@ -419,6 +422,108 @@ def test_fixed_qwen_rewards_share_frozen_weights_and_task_rubrics(
     )
     assert calls[0][1]["enable_thinking"] is True
     assert "standalone story" in calls[0][0][0]["content"]
+
+
+@pytest.mark.parametrize("thinking", [True, False])
+@pytest.mark.parametrize("backend", ["transformers", "vllm"])
+def test_grpo_loss_and_kl_use_exact_rollout_tokens_in_both_modes(
+    tiny_sweep, monkeypatch, thinking, backend,
+):
+    """Exercise pinned TRL's generation->reward->loss path with known traces.
+
+    vLLM is a token-producing test double here; the GPU acceptance audit covers
+    its real engine. No decoded text is allowed to replace rollout IDs.
+    """
+    import torch
+    from transformers import AutoModelForCausalLM
+    from trl import GRPOConfig, GRPOTrainer
+    from non_verifiable_rewards.training.data import render_prompt
+
+    config, tokenizer = tiny_sweep
+    config["policy"]["enable_thinking"] = thinking
+    prepare(config, tokenizer)
+    dataset = training_dataset(config, config["runs"][0], tokenizer)
+    model = AutoModelForCausalLM.from_pretrained(config["policy"]["id"])
+    captured = []
+
+    class Client:
+        def score(self, name, rows, texts, view):
+            captured.extend(texts)
+            return [1.0, 0.0]
+
+    callback = WeightedReward(
+        Client(), {"rewards": {"length": 1}}, tokenizer,
+        Path(config["output_dir"]) / "trace-test.jsonl",
+    )
+    trainer = GRPOTrainer(
+        model=model, processing_class=tokenizer, train_dataset=dataset,
+        reward_funcs=[callback], args=GRPOConfig(
+            output_dir=str(Path(config["output_dir"]) / "trace-test"),
+            use_cpu=True, bf16=False, report_to="none", num_generations=2,
+            per_device_train_batch_size=2, gradient_accumulation_steps=1,
+            max_completion_length=10, beta=0.04, loss_type="grpo",
+            chat_template_kwargs={"enable_thinking": thinking},
+            mask_truncated_completions=False, remove_unused_columns=False,
+            vllm_importance_sampling_correction=False,
+        ),
+    )
+    strings = (
+        ["<think> good story </think> summary", "<think> bad </think> answer"]
+        if thinking else ["good summary", "bad answer"]
+    )
+    traces = [tokenizer.encode(s, add_special_tokens=False) + [tokenizer.eos_token_id] for s in strings]
+    # Also cover a trace cut by the generation budget: its actual sampled
+    # reasoning tokens remain the target under mask_truncated_completions=False.
+    if thinking:
+        traces[1] = tokenizer.encode("<think> " + "bad " * 9, add_special_tokens=False)
+    inputs = [dataset[0], dataset[0]]
+    expected_prompt = tokenizer.encode(render_prompt(tokenizer, {
+        "dataset": inputs[0]["dataset"], "prompt": inputs[0]["source_prompt"],
+    }, thinking), add_special_tokens=False)
+
+    if backend == "vllm":
+        def generate(prompts, **kwargs):
+            assert prompts == [expected_prompt] * 2
+            return prompts, traces, [[[-1.0]] * len(t) for t in traces], None, None
+
+        trainer.use_vllm = True
+        trainer._last_loaded_step = -1
+        trainer.vllm_generation = SimpleNamespace(generate=generate, sync_weights=lambda: None)
+    else:
+        def generate(input_ids, **kwargs):
+            assert input_ids.tolist() == [expected_prompt] * 2
+            padded = [t + [tokenizer.pad_token_id] * (max(map(len, traces)) - len(t)) for t in traces]
+            return torch.cat([input_ids, torch.tensor(padded)], dim=1)
+
+        monkeypatch.setattr(model, "generate", generate)
+
+    batch = trainer._generate_and_score_completions(inputs)
+    for i, trace in enumerate(traces):
+        mask = batch["completion_mask"][i].bool()
+        assert batch["completion_ids"][i][mask].tolist() == trace
+        assert batch["prompt_ids"][i][batch["prompt_mask"][i].bool()].tolist() == expected_prompt
+    assert captured == tokenizer.batch_decode(traces, skip_special_tokens=True)
+    if thinking:
+        assert "<think>" in captured[0] and "good story" in captured[0]
+    # Recompute reference likelihood independently on the full raw trajectory.
+    with torch.no_grad():
+        for i, trace in enumerate(traces):
+            ids = torch.tensor([expected_prompt + trace])
+            logits = trainer.ref_model(input_ids=ids).logits[0, len(expected_prompt) - 1:-1].float()
+            logp = (logits / trainer.temperature).log_softmax(-1).gather(1, torch.tensor(trace)[:, None]).squeeze(1)
+            torch.testing.assert_close(batch["ref_per_token_logps"][i, :len(trace)], logp)
+    # Inspect the actual differentiable forward used by the policy loss.
+    forwards = []
+    hook = model.register_forward_pre_hook(
+        lambda model, args, kwargs: forwards.append(kwargs["input_ids"].detach().clone()),
+        with_kwargs=True,
+    )
+    loss = trainer.compute_loss(model, batch)
+    loss.backward()
+    hook.remove()
+    assert torch.isfinite(loss)
+    assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in model.parameters())
+    assert torch.equal(forwards[-1], torch.cat([batch["prompt_ids"], batch["completion_ids"]], dim=1))
 
 
 def test_real_grpo_resume_export_reload_and_benchmark(tiny_sweep, monkeypatch):

@@ -238,6 +238,7 @@ def test_lm_backend_reuses_task_likelihoods_for_all_reference_rewards(
             return [[math.log(0.1)] * 5 for _ in contexts]
 
     engine = Backend.__new__(Backend)
+    engine.config = {}
     engine.name, engine.scorer = "lm", Scorer()
     engine.vr_cli = VRCLIReward(engine.scorer)
     with Journal(tmp_path / "baselines.jsonl") as baselines:

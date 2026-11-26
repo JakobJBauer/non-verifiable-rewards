@@ -86,7 +86,7 @@ class RewardFactory:
                     self.scorer, context_builder=context
                 )
             elif name == "llm_judge":
-                reward = reward_api.LLMJudgeReward(self.scorer, task=task)
+                reward = reward_api.LLMJudgeReward(self.scorer, task=task, **self.config["judge"])
             else:
                 cls = {
                     "reference_likelihood": reward_api.ReferenceLikelihoodReward,

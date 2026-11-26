@@ -119,6 +119,16 @@ class CausalLMScorer:
         """
         contexts = text_batch(contexts, "contexts")
         labels = text_batch(labels, "labels")
+        self._label_ids(labels)
+        # Reuse the scoring path's BOS policy and context-plus-target limit.
+        encoded = [
+            self._encode(context, labels[0], i)[0][:-1]
+            for i, context in enumerate(contexts)
+        ]
+        return self.label_logprobs_from_ids(encoded, labels)
+
+    def _label_ids(self, labels):
+        labels = text_batch(labels, "labels")
         if not labels:
             raise ValueError("Need at least one label")
         tokens = [
@@ -131,11 +141,24 @@ class CausalLMScorer:
             getattr(self.tokenizer, "all_special_ids", [])
         ):
             raise ValueError("Labels must encode to distinct, non-special tokens")
-        # Reuse the scoring path's BOS policy and context-plus-target limit.
-        encoded = [
-            self._encode(context, labels[0], i)[0][:-1]
-            for i, context in enumerate(contexts)
-        ]
+        return label_ids
+
+    def _check_prompt_ids(self, prompts, *, extra_tokens):
+        for ids in prompts:
+            if not ids or any(type(token) is not int or token < 0 for token in ids):
+                raise ValueError("Prompts must contain nonempty lists of token IDs")
+            if (
+                self.max_length is not None
+                and len(ids) + extra_tokens > self.max_length
+            ):
+                raise ValueError(
+                    "Prompt + generation/scoring budget exceeds model context; no text was truncated"
+                )
+
+    def label_logprobs_from_ids(self, encoded, labels):
+        """Score labels after exact token IDs, preserving generated reasoning."""
+        label_ids = self._label_ids(labels)
+        self._check_prompt_ids(encoded, extra_tokens=1)
         if not encoded:
             return []
         import torch
@@ -177,6 +200,45 @@ class CausalLMScorer:
                     for values in logp[:, label_ids].tolist()
                 )
                 del logits, logp
+        return results
+
+    @property
+    def generation_config(self):
+        return self.model.generation_config
+
+    def generate_ids(self, prompts, *, max_new_tokens, stop_token_id=None):
+        """Greedy continuation, optionally ending at a reasoning delimiter.
+
+        Return generated IDs including the stop token. Never decode/re-encode
+        a trace that will subsequently condition a probability calculation.
+        """
+        import torch
+
+        positive_int(max_new_tokens, "max_new_tokens")
+        self._check_prompt_ids(prompts, extra_tokens=max_new_tokens)
+        eos = self.generation_config.eos_token_id
+        if eos is None:
+            eos = self.tokenizer.eos_token_id
+        stops = [eos] if isinstance(eos, int) else list(eos or [])
+        if stop_token_id is not None and stop_token_id not in stops:
+            stops.append(stop_token_id)
+        self.model.eval()
+        device = self.model.get_input_embeddings().weight.device
+        results = []
+        with torch.inference_mode():
+            for prompt in prompts:
+                ids = torch.tensor([prompt], device=device)
+                output = self.model.generate(
+                    input_ids=ids,
+                    attention_mask=torch.ones_like(ids),
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    repetition_penalty=1.0,
+                    eos_token_id=stops or None,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    use_cache=True,
+                )
+                results.append(output[0, len(prompt) :].tolist())
         return results
 
     def _encode(

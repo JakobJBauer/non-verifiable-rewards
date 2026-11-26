@@ -139,8 +139,11 @@ def read_jsonl(path):
 
 
 def load_config(path):
+    from ..rewards.llm_judge import validate_judge_config
+
     with Path(path).open("rb") as stream:
         config = tomllib.load(stream)
+    config["judge"] = validate_judge_config(config.get("judge", {}))
     for key in (
         "threads",
         "pairs_per_dataset",

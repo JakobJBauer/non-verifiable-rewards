@@ -36,7 +36,7 @@ def policy_prompt(dataset, prompt):
     raise ValueError(f"Unknown task: {dataset}")
 
 
-def render_prompt(tokenizer, row, enable_thinking=False):
+def render_prompt(tokenizer, row, enable_thinking=True):
     return tokenizer.apply_chat_template(
         [{"role": "user", "content": policy_prompt(row["dataset"], row["prompt"])}],
         tokenize=False,

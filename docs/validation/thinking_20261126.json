@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-26",
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "model": "Qwen/Qwen3-4B",
+  "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+  "dtype": "bfloat16",
+  "packages": {
+    "torch": "2.11.0+cu129",
+    "transformers": "5.22.2",
+    "trl": "1.18.2",
+    "vllm": "0.23.0+cu129"
+  },
+  "artifacts": "/workspace/writeable/non-verifiable-rewards/outputs/thinking_validation_20261126",
+  "artifact_sha256": {
+    "grpo-transformers.json": "b37d39b920a9338ffc7b6bb6a141d53223bdfcb3a61fa95bd879433661220cab",
+    "judge-vllm.json": "cdb24c1620dfe6acba5184c321309038abcd4abd8cd4038dcf351bfb8d0ab428",
+    "grpo-vllm.json": "e484600405c869ecc55be5350ae271c7bd4c59a2c86cd95f6467e2389e9934d7"
+  },
+  "judge": {
+    "passed": true,
+    "same_trace_max_logprob_difference": 0.375,
+    "transformers": {
+      "False": {
+        "policy_tokens": 4,
+        "policy_thinking_closed": false,
+        "judge_score": 0.999998462621853,
+        "judge_thinking_tokens": 0
+      },
+      "True": {
+        "policy_tokens": 317,
+        "policy_thinking_closed": true,
+        "judge_score": 0.9999999993378179,
+        "judge_thinking_tokens": 461
+      }
+    },
+    "vllm": {
+      "False": {
+        "policy_tokens": 4,
+        "policy_thinking_closed": false,
+        "judge_score": 0.9999974657921663,
+        "judge_thinking_tokens": 0
+      },
+      "True": {
+        "policy_tokens": 317,
+        "policy_thinking_closed": true,
+        "judge_score": 0.9999999970328948,
+        "judge_thinking_tokens": 434
+      }
+    },
+    "policy_ids_equal_between_backends": {
+      "False": true,
+      "True": true
+    }
+  },
+  "grpo": {
+    "transformers": {
+      "passed": true,
+      "optimizer_steps": 2,
+      "loss_sequences": 4,
+      "completion_lengths": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "changed_parameters": 144,
+      "weight_checks": []
+    },
+    "vllm": {
+      "passed": true,
+      "optimizer_steps": 2,
+      "loss_sequences": 4,
+      "completion_lengths": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "changed_parameters": 144,
+      "weight_checks": [
+        {
+          "checked_tensors": 398,
+          "trainable_sha256": "bf56dc8e09c7d60caa1b5f86c24473b79aa73c52a784cf59a2edefc976e88f93"
+        },
+        {
+          "checked_tensors": 398,
+          "trainable_sha256": "84e7eb3215d56635a1797ec1ae6ad7878d9a2da9162339700c0d525a946b15ac"
+        }
+      ]
+    }
+  }
+}

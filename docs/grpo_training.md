@@ -72,7 +72,7 @@ The default settings are:
 | Objective | Explicit TRL `loss_type="grpo"`, group reward scaling, KL coefficient 0.04 |
 | Fine-tuning | LoRA rank 16, alpha 32, all Qwen attention/MLP projections |
 | Precision | bfloat16 on CUDA |
-| Thinking | Disabled, matching the current non-reasoning task prompts |
+| Thinking | Enabled for the policy; disabled independently for the judge |
 
 Set `policy.lora = false` for full fine-tuning. That needs considerably more
 memory for optimizer states. Checkpoints, tokenizer, optimizer/scheduler and RNG
@@ -159,8 +159,59 @@ to generation evaluation, without inventing preference pairs. An
 selects the views already described in [the reasoning guide](supergpqa.md).
 The default view is the complete decoded output; raw token IDs are decoded so
 structured chat parsers cannot discard a reasoning field. Correct-option texts
-are not gold reasoning traces. `policy.enable_thinking = true` enables the
-model's thinking template for a reasoning experiment.
+are not gold reasoning traces.
+
+## Policy and judge thinking
+
+The standard settings, for either `inference.backend = "transformers"` or
+`"vllm"` (and `"auto"`), are:
+
+```toml
+[policy]
+enable_thinking = true
+
+[judge]
+enable_thinking = false
+max_thinking_tokens = 1024
+```
+
+`policy.enable_thinking` controls the chat template for GRPO rollouts and the
+base/trained-policy benchmarks. Set it to `false` for a non-thinking policy.
+The preference-pair benchmark still teacher-forces each supplied candidate
+directly under that prompt; it does not generate or marginalize a reasoning
+trace for existing candidates.
+Training self-certainty uses the same policy prompt and thinking setting.
+Reference-likelihood, VR-CLI and NOVER still score their answer targets with
+their fixed non-thinking reference prompts. The dated 20 November config
+retains its original `false` policy setting for historical reproducibility.
+Use a fresh output directory when changing either switch; sweep and benchmark
+identities include these settings.
+
+Thinking is compatible with GRPO: the action is the entire generated sequence,
+including reasoning, delimiters, final answer and EOS. Pinned TRL tokenizes
+the prompt once and passes those IDs to either generator. Its loss, old-policy
+log probabilities and reference-policy KL use the returned completion IDs
+directly, without reconstructing a chat conversation or dropping reasoning.
+Our reward callback also decodes those raw IDs, bypassing structured parsers
+that may separate reasoning from the answer. vLLM weight synchronization remains
+independent of thinking mode. CPU regressions exercise these token/mask and KL
+invariants through both TRL generation branches, including truncated thinking.
+
+The judge has separate frozen parameters and its own independent setting.
+When enabled it generates a greedy rationale through `</think>`, then scores
+the five rating probabilities after that exact trace. Its rationale never
+enters the policy loss. See [the judge guide](llm_judge.md) for budgets and
+failure handling. Choosing a non-thinking judge does not disable policy thinking.
+
+The completion budget covers **reasoning plus answer**. Thinking may require a
+larger `optimization.max_completion_length` and `benchmark.max_new_tokens`;
+watch the benchmark's generation-limit rate. The existing full-completion
+reward view includes reasoning text, so lexical/length rewards can change when
+thinking is enabled. Choosing a reward view changes only scoring, never the
+tokens used for the policy update. Truncated rollouts retain their sampled
+tokens under the existing `mask_truncated_completions=False` setting.
+The [thinking validation report](thinking_validation_20261126.md) records
+the CPU regressions and real Qwen3-4B checks on both backends.
 
 ## Persistence, resume and individual stages
 

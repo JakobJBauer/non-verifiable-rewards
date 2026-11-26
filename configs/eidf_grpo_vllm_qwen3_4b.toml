@@ -3,6 +3,13 @@
 output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_vllm_qwen3_4b"
 cache_dir = "/root/.cache/non-verifiable-rewards"
 
+[policy]
+enable_thinking = true
+
+[judge]
+enable_thinking = false
+max_thinking_tokens = 1024
+
 [inference]
 backend = "vllm"
 gpu_memory_utilization = 0.35

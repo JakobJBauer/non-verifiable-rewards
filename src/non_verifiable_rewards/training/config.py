@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 
 from ..experiments.io import ALL_REWARDS as REWARDS
+from ..rewards.llm_judge import JUDGE_DEFAULTS, validate_judge_config
 
 DATASETS = ("reddit_tldr", "litbench", "wmt14_de_en", "supergpqa")
 DEFAULTS = {
@@ -24,7 +25,7 @@ DEFAULTS = {
         "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
         "device": "cuda",
         "dtype": "bfloat16",
-        "enable_thinking": False,
+        "enable_thinking": True,
         "lora": True,
         "lora_r": 16,
         "lora_alpha": 32,
@@ -63,6 +64,7 @@ DEFAULTS = {
         "max_grad_norm": 1.0,
         "warmup_ratio": 0.03,
     },
+    "judge": JUDGE_DEFAULTS.copy(),
     "reward_models": {
         "python": "",
         "bleurt_python": "",
@@ -138,6 +140,7 @@ def validate_config(raw):
         "inference",
     ):
         config[section] = _merge(DEFAULTS[section], raw.get(section, {}), section)
+    config["judge"] = validate_judge_config(raw.get("judge", {}))
     inference = config["inference"]
     if inference["backend"] not in ("auto", "transformers", "vllm"):
         raise ValueError("inference.backend must be auto, transformers or vllm")

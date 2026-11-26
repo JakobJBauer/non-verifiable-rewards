@@ -666,12 +666,15 @@ def write_reports(result, config):
             "WordNet checksums are recorded in models.json, and NLTK/WordNet versions in each score."
         )
     if "llm_judge" in result["rewards"]:
+        thinking = config.get("judge", {}).get("enable_thinking", False)
         notes.append(
             "The LLM judge shares the fixed Qwen checkpoint and independently rates each "
             "candidate with a task-specific reference-aware quality rubric. It never sees "
             "preference labels or the competing candidate. Its score is the expected 0–4 "
             "rating, divided by four, using next-token probabilities renormalized over the "
-            "five digits with thinking disabled. The rubric, rating probabilities and total "
+            "five digits "
+            + ("after a generated thinking trace. " if thinking else "with thinking disabled. ")
+            + "The rubric, rating probabilities and total "
             "valid-rating probability mass are recorded per score. It is a model judgment, "
             "not a calibrated probability of human preference."
         )

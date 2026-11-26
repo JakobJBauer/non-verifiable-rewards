@@ -9,7 +9,7 @@ revision = "1cfa9a7208912126459214e8b04321603b3df60c"
 device = "cuda"
 dtype = "bfloat16"
 lora = true
-enable_thinking = false
+enable_thinking = false # Historical run; new standard sweeps enable policy thinking.
 
 [data]
 datasets = ["reddit_tldr", "litbench", "wmt14_de_en"]

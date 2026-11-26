@@ -337,7 +337,10 @@ class Backend:
                     "candidate_tokens": candidate_tokens,
                 }
             start = time.perf_counter()
-            judge = LLMJudgeReward(self.scorer, task=task_for_dataset(pair["dataset"]))
+            judge = LLMJudgeReward(
+                self.scorer, task=task_for_dataset(pair["dataset"]),
+                **self.config.get("judge", {}),
+            )
             judgments = judge.score_with_details(
                 candidates, references=references, prompts=[pair["prompt"]] * 2
             )
