@@ -80,6 +80,7 @@ def main(argv=None):
                     "inference": config["inference"],
                     "runs": runs,
                     "optimization": config["optimization"],
+                    "wandb": config["wandb"],
                     "data": config["data"],
                     "benchmark": config["benchmark"],
                     "reward_models": "Frozen independently of the optimized policy; weighted sum before group normalization",
