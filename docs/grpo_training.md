@@ -65,9 +65,9 @@ The default settings are:
 | --- | --- |
 | Training data | 4,096 distinct training prompts per dataset; 12,288 total |
 | Training budget | 500 optimizer steps per run |
-| GRPO group | 4 completions per prompt |
-| Batch | 2 completions per microbatch × 4 accumulation steps; 2 distinct prompts per optimizer step |
-| Completion limit | 1,024 generated tokens |
+| GRPO group | 8 completions per prompt |
+| Batch | 2 completions per microbatch × 4 accumulation steps; 1 distinct prompt per optimizer step |
+| Completion limit | 2,048 generated tokens, shared by thinking and answer |
 | Prompt limit | 4,096 tokens; overlong training rows are excluded and counted, not truncated |
 | Optimizer | AdamW, learning rate 1e−5, 3% warmup, linear schedule |
 | Objective | Explicit TRL `loss_type="grpo"`, group reward scaling, KL coefficient 0.04 |
