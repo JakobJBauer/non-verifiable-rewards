@@ -8,6 +8,10 @@ from pathlib import Path
 
 from ..experiments.io import ALL_REWARDS as REWARDS
 from ..rewards.llm_judge import JUDGE_DEFAULTS, validate_judge_config
+from ..rewards.self_consistency import (
+    SELF_CONSISTENCY_DEFAULTS,
+    validate_self_consistency_config,
+)
 
 DATASETS = ("reddit_tldr", "litbench", "wmt14_de_en", "supergpqa")
 DEFAULTS = {
@@ -72,6 +76,7 @@ DEFAULTS = {
         "warmup_ratio": 0.03,
     },
     "judge": JUDGE_DEFAULTS.copy(),
+    "self_consistency": SELF_CONSISTENCY_DEFAULTS.copy(),
     "reward_models": {
         "python": "",
         "bleurt_python": "",
@@ -149,6 +154,9 @@ def validate_config(raw):
     ):
         config[section] = _merge(DEFAULTS[section], raw.get(section, {}), section)
     config["judge"] = validate_judge_config(raw.get("judge", {}))
+    config["self_consistency"] = validate_self_consistency_config(
+        raw.get("self_consistency", {})
+    )
     tracking = config["wandb"]
     if not isinstance(tracking["enabled"], bool):
         raise ValueError("wandb.enabled must be boolean")
@@ -325,7 +333,7 @@ def validate_config(raw):
         if (
             not isinstance(weights, dict)
             or not weights
-            or not set(weights) <= set(REWARDS) | {"answer_accuracy"}
+            or not set(weights) <= set(REWARDS) | {"answer_accuracy", "self_consistency"}
         ):
             raise ValueError(f"Unknown or empty reward mixture in {name}")
         for reward, weight in weights.items():
@@ -349,10 +357,19 @@ def validate_config(raw):
                 raise ValueError(f"Run {name} has no training datasets with train_supergpqa=false")
         if "answer_accuracy" in weights and run["datasets"] != ["supergpqa"]:
             raise ValueError("answer_accuracy training requires a SuperGPQA-only run")
+        if "self_consistency" in weights:
+            if weights["self_consistency"] <= 0:
+                raise ValueError("self_consistency requires a positive weight")
+            if set(run["datasets"]) - {"supergpqa"} and opt["num_generations"] > 26:
+                raise ValueError(
+                    "Open-ended self-consistency supports at most 26 generations"
+                )
         run.setdefault("candidate_views", {})
         if not isinstance(run["candidate_views"], dict):
             raise ValueError("candidate_views must be a table")
         for reward, view in run["candidate_views"].items():
+            if reward == "self_consistency" and view != "completion":
+                raise ValueError("self_consistency requires the completion view")
             if reward not in weights or view not in (
                 "auto",
                 "completion",

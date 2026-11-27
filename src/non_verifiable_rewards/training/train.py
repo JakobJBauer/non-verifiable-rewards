@@ -205,9 +205,26 @@ def train_run(config, run):
                 from ..inference.training import TrainingSwitch
 
                 switch = TrainingSwitch(trainer, target / "inference_trace.jsonl")
+            if "self_consistency" in run["rewards"]:
+                from ..rewards.self_consistency import SelfConsistencyReward
+                from .self_consistency import PolicySelector
+
+                settings = config["self_consistency"]
+                callback.self_consistency = SelfConsistencyReward(
+                    group_size=opt["num_generations"],
+                    selector=PolicySelector(
+                        trainer,
+                        selection_temperature=settings["selection_temperature"],
+                        max_context_tokens=settings["max_context_tokens"],
+                    ),
+                    seed=config["seed"],
+                    **settings,
+                )
             try:
                 result = trainer.train(resume_from_checkpoint=resume)
             finally:
+                # Release the callback -> selector -> trainer reference cycle.
+                callback.self_consistency = None
                 if switch is not None:
                     switch.close()
             if trainer.state.global_step != opt["max_steps"]:
@@ -250,7 +267,8 @@ def train_run(config, run):
         "steps": opt["max_steps"],
         "model_files": checkpoint_manifest(export),
         "base_asset": json.loads((root / "models.json").read_text())["policy"],
-        "reward_models_frozen": True,
+        "reward_models_frozen": "self_consistency" not in run["rewards"],
+        "online_rewards": [name for name in run["rewards"] if name == "self_consistency"],
         "export": "Standalone merged weights and tokenizer",
     }
     write_json(target / "export_manifest.json", metadata)

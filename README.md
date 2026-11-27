@@ -48,6 +48,9 @@ human-preference pairs. See the [SuperGPQA guide](docs/supergpqa.md) for reward
 interpretation, GRPO callback/mixture examples and the generated-answer benchmark.
 The [GRPO training pipeline](docs/grpo_training.md) trains and persists Qwen3-4B
 policies with configurable reward mixtures, then benchmarks each saved policy.
+The [self-consistency reward](docs/self_consistency.md) adds online majority
+pseudo-labels for SuperGPQA and repeated candidate-selection votes for the three
+open-ended tasks, using the live policy and standard GRPO.
 The default [sweep config](configs/grpo_qwen3_4b.toml) defines thirteen independent
 runs, one per reward, with a balanced TL;DR/LitBench/WMT14/SuperGPQA training
 sample and held-out evaluation on all four tasks. Set `[data] train_supergpqa = false`
@@ -265,7 +268,9 @@ matches without truncating the text. Enable them in experiments with
 
 ## Common interface
 
-All rewards implement:
+Pointwise rewards implement the interface below. The online
+[self-consistency reward](docs/self_consistency.md) instead uses `score_groups`
+on complete rollout groups with a live policy selector.
 
 ```python
 scores = reward.score(candidates, references=references, prompts=prompts)

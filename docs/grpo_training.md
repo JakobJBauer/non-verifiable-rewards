@@ -85,6 +85,11 @@ choice is recorded rather than silently using TRL's newer DAPO default.
 
 ## Data and reward models
 
+The optional [self-consistency reward](self_consistency.md) uses complete rollout
+groups and the live policy. Select it explicitly with
+`rewards = {self_consistency = 1.0}`; the fixed-model descriptions below apply to
+the other rewards. Standard GRPO optimization is unchanged.
+
 Training exclusively uses the existing loaders' `train` partitions, without
 chosen/rejected labels. References remain metadata for reward callbacks and
 never appear in policy inputs. Policies receive summary, story, German-to-English

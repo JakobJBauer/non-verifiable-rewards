@@ -83,7 +83,8 @@ def main(argv=None):
                     "wandb": config["wandb"],
                     "data": config["data"],
                     "benchmark": config["benchmark"],
-                    "reward_models": "Frozen independently of the optimized policy; weighted sum before group normalization",
+                    "self_consistency": config["self_consistency"],
+                    "reward_models": "Self-consistency uses the live policy; other models are frozen; weighted sum before group normalization",
                 },
                 indent=2,
             )

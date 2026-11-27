@@ -38,7 +38,7 @@ def ensure_sweep(config):
                     d.metadata["Name"]: d.version
                     for d in importlib.metadata.distributions()
                 },
-                "reward_policy": "Frozen reward models, independent of the trained policy",
+                "reward_policy": "Self-consistency uses the live policy; other reward models are frozen independently",
             },
         )
         package = Path(__file__).resolve().parents[1]
