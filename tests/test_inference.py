@@ -15,7 +15,7 @@ def test_backend_selection_is_explicit_and_never_silently_falls_back():
     assert not use_vllm(config, device="cpu")
     options = grpo_inference_options(config)
     assert options["vllm_enable_sleep_mode"]
-    assert options["vllm_max_model_length"] == 5120
+    assert options["vllm_max_model_length"] == 6144
     config["inference"]["backend"] = "transformers"
     assert not grpo_inference_options(config)["use_vllm"]
 

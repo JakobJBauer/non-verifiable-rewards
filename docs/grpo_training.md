@@ -3,8 +3,9 @@
 The training package runs independent, configurable GRPO experiments starting
 from the pinned **Qwen3-4B** checkpoint. The default sweep has **thirteen runs**,
 one for each implemented reward, including the length baseline and both SMART
-variants. Each run uses the same frozen, balanced sample of TL;DR, LitBench and
-WMT14 training prompts. Runs can instead select individual tasks or combine
+variants. Each run uses the same frozen, balanced sample of TL;DR, LitBench,
+WMT14 and SuperGPQA training prompts, and tests on all four datasets.
+Runs can instead select individual tasks or combine
 rewards. No full training sweep is started by installing or inspecting the code.
 
 ```bash
@@ -152,17 +153,51 @@ SMART covers full texts. Confidence intervals are exploratory, without
 multiple-comparison adjustment. Report tables are available as CSV and Parquet,
 and the preference figure as PNG/PDF and embedded in the HTML.
 
-SuperGPQA is supported by setting `data.datasets = ["supergpqa"]` and selecting
-runs. It uses our question-disjoint holdout and adds strict final-answer accuracy
-to generation evaluation, without inventing preference pairs. An
-`answer_accuracy` training reward is available for SuperGPQA-only runs.
-`candidate_views = {bertscore = "answer_text", reference_likelihood = "reasoning"}`
-selects the views already described in [the reasoning guide](supergpqa.md).
-All views first discard the policy's private thinking trace. The default
-`completion` view scores the entire visible answer after `</think>`; `reasoning`
-scores only its visible explanation before the final answer line. Raw token IDs
-are decoded while preserving thinking delimiters, even if the tokenizer marks
-them as special tokens. Correct-option texts are not gold reasoning traces.
+The default `data.datasets` contains all four datasets. To keep SuperGPQA in
+testing but remove it from every training run, set:
+
+```toml
+[data]
+datasets = ["reddit_tldr", "litbench", "wmt14_de_en", "supergpqa"]
+train_supergpqa = false
+```
+
+The switch defaults to `true`. It also overrides explicit `runs.datasets` lists;
+a run left without any training datasets is rejected. No training split is
+requested or sampled for a disabled task. Removing SuperGPQA from `data.datasets` excludes it from
+both training and evaluation. Use a fresh `output_dir` when changing scope or
+scoring rules; existing frozen sweeps cannot be reused with changed inputs.
+
+SuperGPQA uses our question-disjoint holdout, with correct option text as the
+reference and no preference pairs. The policy is asked for `Answer: <answer text>`.
+The default `auto` candidate view uses generated answer text for SuperGPQA and
+the visible completion for the other tasks. All rewards, including reference
+likelihood, use this same answer extraction during training and benchmarking:
+
+- Strip private thinking and a final `Answer:`/`Option C:` presentation label.
+- Preserve written text: `Battle Pass` is scored against `Fortnite Battle Pass`.
+- Resolve only bare labels: `Option B`, `Answer: B`, or `B` becomes option B's text.
+- If a bare letter exactly matches an option's written text, preserve it as text;
+  use `Option B`, `(B)`, or `B)` to make the positional selection explicit.
+- Use a labelled final line when present; otherwise retain the visible response.
+- Empty, unfinished-thinking, and out-of-range bare labels receive `invalid_score`.
+
+Text accompanying a label takes precedence over the label. No gold answer is
+consulted when extracting candidates. Generated-output journals record both the
+visible completion and extracted `reward_input`; training traces include
+`reward_candidates` for each component. Original rollout token IDs remain intact
+for GRPO loss/KL computation. Similarity rewards give partial text-match credit;
+reference likelihood scores the correct text conditioned on the candidate text.
+These are answer-level rewards, not reasoning verification.
+
+The generated benchmark additionally reports `answer_accuracy`: a bare label or
+an exact, unique option-text match counts as a selection (case and whitespace
+are normalized; partial text does not count). This differs from the standalone
+reasoning evaluator's historical strict `Answer: X` parser. An `answer_accuracy`
+training baseline is available for SuperGPQA-only runs. Explicit `completion`
+and `reasoning` views remain available for separate experiments; `reasoning`
+requires a visible explanation followed by `Answer: X`. See the
+[SuperGPQA guide](supergpqa.md) for the data split and limitations.
 
 ## Policy and judge thinking
 

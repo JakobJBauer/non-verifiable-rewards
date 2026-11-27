@@ -51,7 +51,7 @@ def test_invalid_completions_keep_positions_without_calling_reward_on_empty_text
     callback = GRPORewardAdapter(reward, candidate_view=view, invalid_score=-7)
     assert callback(
         prompts=["Q"] * 3,
-        completions=["Bad format", "Plan\nAnswer: B", ""],
+        completions=["Answer: J", "Plan\nAnswer: B", ""],
         reference=["Gold"] * 3,
         options=[["A text", "B text"]] * 3,
     ) == [-7, 0.75, -7]

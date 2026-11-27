@@ -41,7 +41,8 @@ DEFAULTS = {
         ],
     },
     "data": {
-        "datasets": list(DATASETS[:3]),
+        "datasets": list(DATASETS),
+        "train_supergpqa": True,
         "train_examples_per_dataset": 4096,
         "max_prompt_tokens": 4096,
         "stream_shuffle_buffer": 10000,
@@ -190,6 +191,8 @@ def validate_config(raw):
     ):
         _positive(data[key], key)
     names = data["datasets"]
+    if not isinstance(data["train_supergpqa"], bool):
+        raise ValueError("data.train_supergpqa must be boolean")
     if (
         not isinstance(names, list)
         or not names
@@ -314,6 +317,10 @@ def validate_config(raw):
             or not set(run["datasets"]) <= set(names)
         ):
             raise ValueError("Run datasets must be distinct members of data.datasets")
+        if not data["train_supergpqa"]:
+            run["datasets"] = [d for d in run["datasets"] if d != "supergpqa"]
+            if not run["datasets"]:
+                raise ValueError(f"Run {name} has no training datasets with train_supergpqa=false")
         if "answer_accuracy" in weights and run["datasets"] != ["supergpqa"]:
             raise ValueError("answer_accuracy training requires a SuperGPQA-only run")
         run.setdefault("candidate_views", {})
@@ -321,12 +328,13 @@ def validate_config(raw):
             raise ValueError("candidate_views must be a table")
         for reward, view in run["candidate_views"].items():
             if reward not in weights or view not in (
+                "auto",
                 "completion",
                 "reasoning",
                 "answer_text",
             ):
                 raise ValueError("Invalid candidate view")
-            if view != "completion" and run["datasets"] != ["supergpqa"]:
+            if view not in ("auto", "completion") and run["datasets"] != ["supergpqa"]:
                 raise ValueError("Answer/rationale views require SuperGPQA-only runs")
     config["runs"] = runs
     return config

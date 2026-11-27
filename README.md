@@ -49,7 +49,11 @@ interpretation, GRPO callback/mixture examples and the generated-answer benchmar
 The [GRPO training pipeline](docs/grpo_training.md) trains and persists Qwen3-4B
 policies with configurable reward mixtures, then benchmarks each saved policy.
 The default [sweep config](configs/grpo_qwen3_4b.toml) defines thirteen independent
-runs, one per reward, with a balanced TL;DR/LitBench/WMT14 training sample.
+runs, one per reward, with a balanced TL;DR/LitBench/WMT14/SuperGPQA training
+sample and held-out evaluation on all four tasks. Set `[data] train_supergpqa = false`
+to disable SuperGPQA training while retaining its test evaluation. SuperGPQA
+rewards score the generated answer text after removing thinking; bare option
+labels are resolved to their option text. The reference is the correct option text.
 
 `configs/eidf_qwen3_4b_three_tasks.toml` enables all three datasets and all reward
 backends, including SMART, in a new output directory. A config can instead set

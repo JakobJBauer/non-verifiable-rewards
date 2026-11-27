@@ -1,0 +1,287 @@
+{
+  "date": "2026-11-27",
+  "scope": "Two GRPO optimizer steps; Qwen3-4B LoRA r=4; 2 real train/test examples per dataset selected for short prompts; thinking disabled for rollout smoke; tagged-thinking invariance tested with real frozen reward models. Software verification only.",
+  "cluster": "eidf-dev / NVIDIA A100-SXM4-40GB",
+  "remote_artifacts": "/workspace/writeable/non-verifiable-rewards/outputs/supergpqa_answers_20261127_checked",
+  "local_tests": {
+    "passed": 416,
+    "skipped": 5
+  },
+  "cluster_focused_tests": {
+    "passed": 89
+  },
+  "policy": {
+    "id": "Qwen/Qwen3-4B",
+    "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "enable_thinking": false,
+    "lora": true,
+    "lora_r": 4,
+    "lora_alpha": 8,
+    "lora_dropout": 0.0,
+    "lora_target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ]
+  },
+  "optimization": {
+    "max_steps": 2,
+    "learning_rate": 1e-05,
+    "per_device_train_batch_size": 2,
+    "gradient_accumulation_steps": 4,
+    "num_generations": 2,
+    "max_completion_length": 128,
+    "beta": 0.04,
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "save_steps": 2,
+    "save_total_limit": 2,
+    "logging_steps": 1,
+    "gradient_checkpointing": true,
+    "max_grad_norm": 1.0,
+    "warmup_ratio": 0.03
+  },
+  "trained_datasets": [
+    "litbench",
+    "reddit_tldr",
+    "supergpqa",
+    "wmt14_de_en"
+  ],
+  "data_counts": {
+    "reddit_tldr": {
+      "train": 2,
+      "test_pairs": 2,
+      "generation_prompts": 2,
+      "excluded_train": {
+        "duplicate_prompt": 0,
+        "prompt_too_long": 0,
+        "reference_budget": 0
+      }
+    },
+    "litbench": {
+      "train": 2,
+      "test_pairs": 2,
+      "generation_prompts": 2,
+      "excluded_train": {
+        "duplicate_prompt": 0,
+        "prompt_too_long": 0,
+        "reference_budget": 0
+      }
+    },
+    "wmt14_de_en": {
+      "train": 2,
+      "test_pairs": 2,
+      "generation_prompts": 2,
+      "excluded_train": {
+        "duplicate_prompt": 0,
+        "prompt_too_long": 0,
+        "reference_budget": 0
+      }
+    },
+    "supergpqa": {
+      "train": 2,
+      "test_pairs": 0,
+      "generation_prompts": 2,
+      "excluded_train": {
+        "duplicate_prompt": 0,
+        "prompt_too_long": 0,
+        "reference_budget": 0
+      }
+    }
+  },
+  "benchmark_coverage": {
+    "base": {
+      "rouge_l": 8,
+      "meteor": 8,
+      "smart1_bertscore": 8,
+      "reference_likelihood": 8,
+      "answer_accuracy": 2
+    },
+    "rouge_l": {
+      "rouge_l": 8,
+      "meteor": 8,
+      "smart1_bertscore": 8,
+      "reference_likelihood": 8,
+      "answer_accuracy": 2
+    }
+  },
+  "training_disabled": {
+    "train_datasets": [
+      "litbench",
+      "reddit_tldr",
+      "wmt14_de_en"
+    ],
+    "training_rows": 6,
+    "supergpqa": {
+      "train": 0,
+      "test_pairs": 0,
+      "generation_prompts": 2,
+      "excluded_train": {}
+    }
+  },
+  "probe_scores": {
+    "completions": [
+      "Battle Pass",
+      "<think>Very long private reasoning including wrong answers.</think>Battle Pass",
+      "Option B",
+      "CoC Weekly Pass",
+      "Answer: C",
+      "Fortnite Battle Pass"
+    ],
+    "reference": "Fortnite Battle Pass",
+    "scores": {
+      "rouge_l": [
+        0.8,
+        0.8,
+        0.3333333333333333,
+        0.3333333333333333,
+        1.0,
+        1.0
+      ],
+      "meteor": [
+        0.6465517241379309,
+        0.6465517241379309,
+        0.16666666666666666,
+        0.16666666666666666,
+        0.9814814814814815,
+        0.9814814814814815
+      ],
+      "smart1_bertscore": [
+        0.9051242470741272,
+        0.9051242470741272,
+        0.8395930528640747,
+        0.8395930528640747,
+        0.9999999403953552,
+        0.9999999403953552
+      ],
+      "reference_likelihood": [
+        -1.500624656677246,
+        -1.500624656677246,
+        -7.093842029571533,
+        -7.093842029571533,
+        -0.0035495758056640625,
+        -0.0035495758056640625
+      ],
+      "vr_cli": [
+        96.46779004007553,
+        96.46779004007553,
+        -848.7459869967438,
+        -848.7459869967438,
+        99.20954879804437,
+        99.20954879804437
+      ],
+      "nover": [
+        -1.1534128049917878,
+        -1.1534128049917878,
+        -4.4279503064622325,
+        -4.4279503064622325,
+        -0.0022156322640089062,
+        -0.0022156322640089062
+      ],
+      "self_certainty": [
+        32.2750244140625,
+        32.2750244140625,
+        34.639716148376465,
+        34.639716148376465,
+        31.315543174743652,
+        31.315543174743652
+      ],
+      "length": [
+        2.0,
+        2.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0
+      ],
+      "answer_accuracy": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "source_sha256": {
+    "__init__.py": "0b1130f2da7232d3b1dbffa35270b1a2272168bbc9f365e443fea3e13789a1db",
+    "_hashing.py": "271810b92284b30d006dab58afe37b10e8a48ef87307b81567fdbb2ea084b4df",
+    "completions.py": "2579164d0f42df9160a499fcad7211f17ef9204589e08acbfcd9774371dc1eda",
+    "data/__init__.py": "735ebc97d0cf95e5bbb62b67af0fcdf857dcf85f7930f8b25640625df17d90fa",
+    "data/loaders.py": "f57ea5df20419f2ce1e05a1465ca17bfeb62cab138c133727235e6283f4b64a8",
+    "data/pairs.py": "d90aaeee4617988478aad631d4a7fd6a64d0cd70953260904045e9dcaa1ae544",
+    "data/publication.py": "181035cbc2b2016c196be53231032e5962d07ef4832c5da0d679052c3dd9e692",
+    "data/supergpqa.py": "3aa62ee6a80be84f0dfe33e06543321fd0c85d299657c353a9d5eae7f649c938",
+    "data/task_splits.py": "24fa8d88d1819466d4a7eb112b269b582bbd5583b4327205f672a8ac5e7618c4",
+    "data/views.py": "b8f16b54426742776098cb9644041a54d1b09a2ac2f38db0b623a6068b6469a7",
+    "data/wmt14.py": "b8856662c091a48998a0a3e550697342cf14a6b8cce040d3293efffb07d910d9",
+    "experiments/__init__.py": "5fbb7877b93ea3367d26c076d9ab6fad8b4a12aa8d1030a37d65d73c17923498",
+    "experiments/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+    "experiments/analysis.py": "f41481a134da1ea8f73c9c8cf277a143db4bd8cff26cb198631f04846dabf139",
+    "experiments/assets.py": "70b798ef04b5052c9b7e794421b80b196c1880de91487460c242f91f93840e89",
+    "experiments/cli.py": "20ea4e93045392ccbd04a2ced3aab3fa19b871183480db20f4b7de30ee88ddd0",
+    "experiments/data.py": "c21eba6e838e98d298e26ce595b2028c5885cee2e36e7b9841f8734196887b5a",
+    "experiments/io.py": "663c16175be917bb481a022964c2fafd0270faf4285b98638ffc7053c6c0bf83",
+    "experiments/nover.py": "8a49b7980a1d9364762659d82dd999fb48edb9ccc050650141b30514f90a79f2",
+    "experiments/report.py": "b1a5963cf880355c6083c951fe0783aac27c2cbfc52fffdb7ec5b15b3d7e8280",
+    "experiments/runner.py": "3902d665597af19b3da39a7abc2648610da5b3b2d1e4605017d12726c9bd829e",
+    "experiments/smoke.py": "e93e06db71e2df21bd16406f74d384294fbe4dfee0152b5e35d1fa7db95b3914",
+    "experiments/supplementary.py": "79f43af699780d87502b09b9d7bbfe4fb3daf92ae3c28d9af5ea5881ae6b7937",
+    "inference/__init__.py": "682a52a8db5765bb0f270025f2ae62c3e894fadab01e08da7170d28cfb6379a4",
+    "inference/policy.py": "f2acc1e602d44c6ef76c6b0ced81cd91c6f10c09a46a1cb41c665fcd6b301c96",
+    "inference/scorer.py": "6adb46c7b287142baab6e4449a596462f765cfeaec947ce79ee10c13d25196c0",
+    "inference/training.py": "107d8d6d3e74e1b42d816ee2542bcc66cf77fa39c0da589cf4a329bf0284d469",
+    "inference/verification.py": "046077a1886f8ceef5694a611b6c166f0d497b75a3159606bd70e1dbbb3a5f9b",
+    "reasoning/__init__.py": "0eb6bd0524665fcf3cea33a9c246d1f27bf2ba7c6fcbd13111d1f7186b36ebd8",
+    "reasoning/__main__.py": "2b0b34b32698fb62c4effeee0d73b9214d4ac8a9809e4ed48041717224bed362",
+    "reasoning/answers.py": "e22dda11c2e3df148cf2c12e4219c26031f0ce35874740925653bb83cf40ff9e",
+    "reasoning/evaluation.py": "8cdc4ef3b25e54ff004c3e8aab36f30532b1b56abc3f14a19ac76b1b22257c44",
+    "rewards/__init__.py": "6d3c0173022285648bf623dd1686bf9a8c7a0ec8295acc3f47260b80d1c691c2",
+    "rewards/base.py": "d2faf8d30d0586b487c6e24f8376cea66a4df9897b372692ca7abd47cbfcec9a",
+    "rewards/bertscore.py": "8a74b7bfd28918638265886bc5dc2687874aa88ee4932f2b2321f92e7b9b8f29",
+    "rewards/bleurt.py": "5e714b308b1982152c3c586ee80a6523a4c0388c40fa0dc566864be242abf157",
+    "rewards/causal_lm.py": "fe9e0639d5fd3024c79e4e9c17f04aa37a832eb0dc19803fa2cf1b9a03430db5",
+    "rewards/chrf.py": "1c092d06ec520e94ec99b92c46797ead2c58d3ccd344b089c6390fa192c030e2",
+    "rewards/grpo.py": "08aa3709e79dc723aa87e17b71f7942389780883c42c6a319f766de1e34da49d",
+    "rewards/length.py": "4e028c767475193e31a44d8673ac143815fb627408b82a013603f48c014cc6ae",
+    "rewards/llm_judge.py": "7b0c3a54bb564a6ceedfd4f3c773599f95b847de5e067c35b38a1040af5fd168",
+    "rewards/meteor.py": "3f08e7ca43fe041cb40ef669ecdcc53b08073d02040f0a40c1ce0f1e2c00b7bc",
+    "rewards/nover.py": "aaf62ed5b2cda70ecd5072e36b68d8a16931fcb8599d5ce14c120b41034edb56",
+    "rewards/prompts.py": "f0dc4ea08228f5b1a914c5a263bb7f856f77e3cd1ffec4c20427f09afd501b5b",
+    "rewards/reference_likelihood.py": "e9127d917caf745df280bb241d1a46fc25f48a64be969492b04b22faf978281c",
+    "rewards/rouge_l.py": "77f31ea362a705d39bef50a3de886677092385350e77dc0699ea924aec2749a6",
+    "rewards/self_certainty.py": "0454dd55f85a47c71e406664527b9b354b2149eeaa6ed505bbee15b4cb672b36",
+    "rewards/smart.py": "d7193ec4ad879abd317ded96d62dacb090c2024249c34572beb75aff4b44dbfe",
+    "rewards/vr_cli.py": "d497ab4ea61f0181bc2027522eeb16bae5c38d37dc01231c90cb868510de45b2",
+    "training/__init__.py": "1745db48fd877ec49535aabbbd69b7e09a1663e4b9fae2938ac3ef75e544aa89",
+    "training/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+    "training/assets.py": "94546dcd683741541a0466f51c359f19382c1de95bb4bee5c33f413960e51982",
+    "training/benchmark.py": "dfd3119f28c790c3dc6f1b61bde196746c2858afdda70079fee2ace5989049a3",
+    "training/cli.py": "4f060f766604475fb17b0b636f2600d3f6ddb082bc283b4b48f637f5184cbf92",
+    "training/config.py": "5a2085241705f129f8b44de555118fb36507e8ba4f83b21e201e852f5b8b74d3",
+    "training/data.py": "16bf73f16fe7de13dee88bf128ab442af9e14ae7ac5a125b151ec0c021d7f075",
+    "training/report.py": "737974f4eaabef4da623fda23e7bf367bdd5138aa0e15c14789bf5df587eb26a",
+    "training/reward_worker.py": "8f8f89bed1e85bf48cbc22e5f921ae763496d1961054263b018df5505e3ca475",
+    "training/rewards.py": "35aefde49058d07504f059e99ed208159d736a16f3c6482e44d1b9edb45beedd",
+    "training/state.py": "bffac5c7290f3c30f85e74ccb6d7fdb396bed81d02d9ac75734f36634170b56d",
+    "training/train.py": "7e83d19d069970fa3f1464d821336eb4dfa9ca77ab7adce20e29db5369a979d2"
+  },
+  "artifacts_sha256": {
+    "acceptance.json": "60f3305fcd79b7460979fb7bdd09f3f154f04de8c355887e548023aef9ee6b5c",
+    "disabled_acceptance.json": "43ec3f70023f5f73be3388455149b4880a4754e5649c3e9e3e5abf1fbbc8fe5e",
+    "probe_scores.json": "d1d2430683413beb4b6bdcbe80ba51882762f866673c427d7737d23f6914f601",
+    "smoke.toml": "0e467033f0ab07d1bed1d3ecfc0f2cb48dbfb825ebd59a94dc1f60a5bbbf7f25",
+    "supergpqa_source.json": "de316329b5d59121f59eb42236ff3397d41ef1be276449f80c7398c617362b1c",
+    "sweep/sweep.json": "1885e45945edf9f975b35070232d836b97ec3a7a9ecd5308e296bbe5b96d2346",
+    "sweep/data_manifest.json": "e946a64c9e1e42b5eedf61fd51fe9772701d92c1a372d6eade0f40eb7eef2c1e",
+    "sweep/runs/rouge_l/trained.json": "9e999bb23ff8631f989bafcfd25ea4d6eaf855a455fe761950b0eec1aef36cbb",
+    "sweep/report_artifacts.json": "7bd2f259407e4e6979586139c88d9cc9bd88a8e0e8238edfe5b09edb18604bf5"
+  }
+}

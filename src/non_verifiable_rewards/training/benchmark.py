@@ -10,7 +10,7 @@ from ..experiments.io import Journal, read_jsonl, write_json
 from ..inference.policy import policy_backend
 from .assets import policy_path
 from .data import render_prompt
-from .rewards import RewardClient
+from .rewards import RewardClient, reward_candidate
 from .state import ensure_sweep, verify_data, verify_model
 
 
@@ -109,7 +109,8 @@ def _generate(config, target, scorer):
                             "dataset": dataset,
                             "prompt_id": row["prompt_id"],
                             "completion": completion,
-                            "reward_input": answer_text(completion),
+                            "visible_completion": answer_text(completion),
+                            "reward_input": reward_candidate(row, completion),
                             "token_ids": ids,
                             "tokens": len(ids),
                             "words": len(completion.split()),
@@ -214,7 +215,7 @@ def score_generations(config, name):
                     for start in range(0, len(pending), batch_size):
                         batch = pending[start : start + batch_size]
                         completions = [
-                            outputs[sample_key(row)]["reward_input"] for row in batch
+                            outputs[sample_key(row)]["completion"] for row in batch
                         ]
                         scores = client.score(reward, batch, completions)
                         for row, score in zip(batch, scores, strict=True):
@@ -235,6 +236,8 @@ def score_generations(config, name):
         "files": hashes,
         "counts": counts,
         "reward_policy": "Same frozen reward checkpoints for base and every trained policy",
+        "candidate_policy": "SuperGPQA generated answer text with bare-label fallback; visible completions for other tasks; private thinking excluded",
+        "answer_accuracy_protocol": "supergpqa_unique_exact_option_text_v1_case_whitespace_normalized",
         "smart_bleurt_scope": "First configured number of frozen generation prompts per dataset",
     }
     write_json(target / "complete.json", complete)

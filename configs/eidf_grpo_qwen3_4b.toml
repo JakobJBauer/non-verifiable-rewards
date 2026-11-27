@@ -17,7 +17,9 @@ enable_thinking = false
 max_thinking_tokens = 1024
 
 [data]
-datasets = ["reddit_tldr", "litbench", "wmt14_de_en"]
+datasets = ["reddit_tldr", "litbench", "wmt14_de_en", "supergpqa"]
+# Disable SuperGPQA training while keeping its held-out evaluation.
+train_supergpqa = true
 train_examples_per_dataset = 4096
 max_prompt_tokens = 4096
 

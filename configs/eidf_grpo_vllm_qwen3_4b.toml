@@ -3,6 +3,11 @@
 output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_vllm_qwen3_4b"
 cache_dir = "/root/.cache/non-verifiable-rewards"
 
+[data]
+datasets = ["reddit_tldr", "litbench", "wmt14_de_en", "supergpqa"]
+# Disable SuperGPQA training while keeping its held-out evaluation.
+train_supergpqa = true
+
 [policy]
 enable_thinking = true
 
