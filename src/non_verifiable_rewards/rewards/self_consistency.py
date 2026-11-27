@@ -11,7 +11,7 @@ from collections import Counter
 
 from .._hashing import digest
 from ..completions import answer_text
-from ..reasoning.evaluation import parse_answer
+from ..reasoning.answers import answer_option
 from .base import positive_int, text_batch
 
 SELF_CONSISTENCY_DEFAULTS = {
@@ -134,7 +134,7 @@ class SelfConsistencyReward:
             }
             if dataset == "supergpqa":
                 identities = [
-                    parse_answer(text, option_count=len(row["options"]))
+                    answer_option(text, row["options"])
                     for text in texts
                 ]
                 votes = identities

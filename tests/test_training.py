@@ -59,7 +59,7 @@ def test_default_sweep_has_each_reward_once_and_explicit_scope():
         {"benchmark": {"generation_prompts_per_dataset": 2, "smart_bleurt_prompts": 3}},
         {"optimization": {"max_step": 2}},
         {"benchmark": {"enabled": "false"}},
-        {"benchmark": {"rewards": ["answer_accuracy"]}},
+        {"data": {"datasets": ["reddit_tldr"]}, "benchmark": {"rewards": ["answer_accuracy"]}},
         {"data": {"datasets": "reddit_tldr"}},
     ],
 )
@@ -73,7 +73,8 @@ def test_task_prompts_request_the_right_output_without_duplicate_translation_ins
     assert "story" in policy_prompt("litbench", "Writing prompt")
     source = "Translate the following German text into English:\n\nHallo Welt"
     assert policy_prompt("wmt14_de_en", source) == source
-    assert policy_prompt("supergpqa", "Question and options") == "Question and options"
+    assert policy_prompt("supergpqa", "Question and options").endswith("Question and options")
+    assert "Answer: <answer text>" in policy_prompt("supergpqa", "Question and options")
 
 
 def test_mixture_preserves_batch_alignment_raw_reasoning_and_signed_weights(tmp_path):
@@ -596,7 +597,12 @@ def test_benchmark_scores_only_answers_and_preserves_raw_generations(tiny_sweep,
     monkeypatch.setattr(RewardClient, "score", score)
     monkeypatch.setattr(benchmark, "benchmark_identity", lambda *args: (target, None))
     benchmark.score_generations(config, "base")
-    assert calls == [(name, ["good summary", ""]) for name in config["benchmark"]["rewards"]]
+    # Pass raw text to the shared extractor once; stored reward_input is audit
+    # data and may itself be a single-letter option text.
+    assert calls == [
+        (name, [row["completion"] for row in outputs])
+        for name in config["benchmark"]["rewards"]
+    ]
     for name in config["benchmark"]["rewards"]:
         scores = [json.loads(line)["score"] for line in (target / f"scores/{name}.jsonl").read_text().splitlines()]
         assert scores == factory.score(name, [dict(dataset="reddit_tldr", prompt="P", reference="gold summary")] * 2, ["good summary", ""])

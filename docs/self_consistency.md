@@ -6,7 +6,7 @@ by default) and computes a fresh pseudo-label before the policy update.
 
 | Task | Pseudo-label | Per-completion reward |
 | --- | --- | --- |
-| SuperGPQA | Most frequent parsed final answer letter | 1 for matching that letter, 0 otherwise |
+| SuperGPQA | Most frequent selected option, resolved from answer text or a label | 1 for matching that option, 0 otherwise |
 | Reddit TL;DR, LitBench, WMT14 German → English | Most frequently selected candidate after repeated policy selections | 1 for the winning visible text, 0 otherwise |
 
 The original task and all distinct, nonempty visible candidates are shown to
@@ -42,6 +42,13 @@ that group receive zero. Invalid SuperGPQA answers cannot vote or win, and its
 confidence denominator includes all rollouts. An entirely invalid group scores
 zero. Unanimous valid groups score one for every member; both cases provide zero
 relative task-reward advantage under GRPO (the KL term remains).
+
+SuperGPQA uses the same answer extraction as the generated-answer benchmark:
+exact, unique option text and bare labels resolve to option identities. Written
+text takes precedence over an accompanying label; partial text is not a vote.
+Single-letter option texts retain their literal meaning unless the output uses
+an explicit positional label such as `Option B`. This uses only the available
+options, never the gold answer key.
 
 For open-ended tasks, identical visible texts after stripping outer whitespace
 share a candidate identity, preventing duplicate copies from splitting votes.

@@ -6,9 +6,12 @@ gold reasoning traces** and no human-ranked pairs of model solutions. GRPO does
 not require preference pairs: generate several completions for each training
 question and score them with the chosen reward functions.
 
-The correct option text supplies a usable answer reference for our existing
-reward API. This supports outcome-conditioned likelihood experiments, but does
-not turn the reference into an independently validated reasoning explanation.
+The correct option text supplies the answer reference for our existing reward
+API. The default GRPO sweep trains and tests on all four datasets, including
+SuperGPQA. Set `[data] train_supergpqa = false` to retain SuperGPQA testing while
+excluding it from training. All default rewards score generated answer text
+after private thinking is removed; bare option labels are resolved to option
+text. This does not provide an independently validated reasoning explanation.
 No synthetic rationales or artificial human-preference labels are introduced.
 
 ## Data and splits
@@ -56,10 +59,12 @@ metadata for subject, difficulty, calculation flag, split and source row.
 `options[answer_letter]`. Malformed references, duplicate UUIDs and ambiguous
 identical options cause an error instead of silently changing the benchmark.
 
-The policy prompt contains the question and **all** options in their original
+The loader prompt contains the question and **all** options in their original
 order, with instructions to finish with `Answer: X`. It does not mark the correct
 choice. The correct answer text naturally appears among the options; the answer
-key and reference column remain reward/evaluation-side data.
+key and reference column remain reward/evaluation-side data. The GRPO launcher
+replaces the loader's letter-format instruction with `Answer: <answer text>`;
+it preserves the question and all choices.
 
 `split="all"` explicitly returns the entire source corpus. Use it to assess a
 model that has not trained or tuned on SuperGPQA. After training on our train
@@ -71,12 +76,12 @@ returns source provenance and split counts.
 
 | Reward family | Recommended candidate view | Interpretation |
 | --- | --- | --- |
-| Exact answer accuracy | Parsed final letter | Verifiable 0/1 outcome baseline |
-| Reference likelihood, VR-CLI, NOVER proxy | Visible explanation before the final answer line, against correct option text | Whether a scoring model finds the known answer more likely given the candidate explanation |
-| ROUGE-L, chrF++, METEOR, BERTScore, BLEURT, SMART | Text of the selected option, against correct option text | Answer agreement/similarity; not an assessment of the rationale |
-| Self-certainty | Visible answer under the task prompt with thinking disabled | Model certainty, which can be high on incorrect answers |
-| LLM judge | Visible answer, with question and correct option text | Rubric-based assessment of answer correctness and any visible explanation; a model judgment, not verification |
-| Length | Visible answer or explanation, declared explicitly | A length control, not correctness |
+| Exact answer accuracy | Bare option label or unique exact option-text match | Verifiable 0/1 outcome baseline; no partial-text credit |
+| Reference likelihood, VR-CLI, NOVER proxy | Extracted answer text, against correct option text | Whether a scoring model finds the known answer more likely given the candidate answer |
+| ROUGE-L, chrF++, METEOR, BERTScore, BLEURT, SMART | Extracted answer text, against correct option text | Answer agreement/similarity; not an assessment of the rationale |
+| Self-certainty | Extracted answer under the task prompt with thinking disabled | Model certainty, which can be high on incorrect answers |
+| LLM judge | Extracted answer, with question and correct option text | Rubric-based assessment; a model judgment, not verification |
+| Length | Extracted answer text | A length control, not correctness |
 
 For likelihood rewards, select `task="multiple_choice"`. The context asks for
 the text of the selected option, conditions on the proposed solution, and scores
@@ -84,16 +89,26 @@ the gold option text as the continuation. VR-CLI's baseline omits only the
 candidate block. The gold label is not inserted into either conditioning prompt.
 References are short answers and are already present as one of the choices;
 candidate answer copying and prior model knowledge can therefore influence these
-scores. Removing the final answer line reduces the simplest copying channel but
-does not guarantee that the remaining rationale is answer-free or correct.
+scores. Default training deliberately measures answer agreement/support. An
+explicit `reasoning` view remains available for a separate explanation-conditioned
+experiment; it is not the default and does not verify reasoning.
 
 Scoring full reasoning against a short answer using text similarity would
-confound quality with output length and answer repetition. Mapping a selected
-letter to its option text avoids that mismatch, but makes these components
+confound quality with output length and answer repetition. Extraction preserves
+generated text (`Battle Pass` stays `Battle Pass`) and removes presentation labels
+(`Option C: Fortnite Battle Pass` becomes `Fortnite Battle Pass`). Only a bare
+label such as `Option B` is mapped to its option text. Text takes precedence over
+an accompanying label, including contradictory labels. A labelled final line is
+used when present; otherwise the visible response is preserved. These are
 answer-level rewards. For a reasoning-trace similarity experiment, a separate
 teacher-rationale dataset would be needed: generate it only for training data,
 check answer correctness and rationale quality, and label it as synthetic
 distillation. Matching a teacher's wording still would not validate reasoning.
+
+Some questions have single-letter option texts. A bare letter exactly matching
+an option's text is preserved as text under the launcher's text-answer protocol;
+`Option B`, `(B)`, or `B)` explicitly selects by position. For options `[A, C, K, B]`,
+`Answer: C` scores the text `C`, whereas `Option C` scores `K`.
 
 ## GRPO callbacks and mixtures
 
@@ -127,13 +142,17 @@ and deliberately chosen mixture runs. Adding correctness to every mixture would
 change the question from “can this reward improve accuracy?” to “does it add to
 correctness supervision?”. Do not add it implicitly through the adapter.
 
-The adapter supports `candidate_view="completion"`, `"reasoning"`, and
-`"answer_text"`. Every view first removes the private thinking trace through
+The standalone adapter supports `candidate_view="completion"`, `"reasoning"`, and
+`"answer_text"`. The launcher's default `auto` view chooses `answer_text` for
+SuperGPQA and `completion` for the other tasks, during both training and testing.
+Every view first removes the private thinking trace through
 `</think>`. The reasoning view then removes a valid final `Answer: X` line,
 leaving only the visible explanation. Outputs without a visible explanation
 receive the explicit `invalid_score` in that view. Unclosed thinking or empty
-answers receive `invalid_score` in every view. The completion view can score
-nonconforming visible answers; the accuracy benchmark still counts them as invalid.
+answers receive `invalid_score` in every view. The answer-text view also rejects
+out-of-range bare labels. GRPO answer accuracy resolves labels or uniquely matches
+full option text, ignoring case and whitespace; partial answers receive zero.
+The standalone evaluator below retains its strict historical letter protocol.
 
 Set `invalid_score` for the actual reward's scale: zero is a floor for ROUGE but
 can be *better* than valid negative BLEURT/log-likelihood values. The adapter
@@ -236,7 +255,10 @@ partitions. The prepare/evaluate commands and reward callbacks are covered by
 regression tests. On all 2,653 test rows, synthetic correct-answer controls score
 100%, and deliberately wrong, malformed and missing-answer controls score 0%;
 the latter two retain every row in the denominator. These are software checks,
-not model evaluation results. No policy training or model generation has been run.
+not model evaluation results. A subsequent
+[two-step GPU training/evaluation check](supergpqa_training_validation_20261127.md)
+validated all four tasks and the answer-text reward protocol. It does not
+establish training effectiveness or full-benchmark performance.
 
 ## Sources and citation
 

@@ -34,7 +34,7 @@ def test_plurality_rewards_answer_equivalence_without_a_gold_key():
     [
         (["Answer: A"] * 4 + ["Answer: B"] * 4, [0] * 8, True),
         (["Answer: B"] * 8, [1] * 8, False),
-        (["Answer: J", "<think>Answer: A", "", "A"] * 2, [0] * 8, False),
+        (["Answer: J", "<think>Answer: A", "", "unknown"] * 2, [0] * 8, False),
         (["<think>Answer: B</think>Answer: A"] + [""] * 7, [1] + [0] * 7, False),
     ],
 )

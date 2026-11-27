@@ -3,7 +3,8 @@
 import math
 
 from ..completions import answer_text
-from ..reasoning.evaluation import parse_answer, reasoning_text
+from ..reasoning.answers import answer_option, generated_answer, reference_answer
+from ..reasoning.evaluation import reasoning_text
 from .base import checked_scores, text_batch
 
 
@@ -46,7 +47,7 @@ def answer_accuracy_reward(completions, answer_letter, options, **kwargs):
         if len(letter) != 1 or letter not in "ABCDEFGHIJ"[: len(choices)]:
             raise ValueError("Invalid gold answer letter")
     return [
-        float(parse_answer(text, option_count=len(choices)) == letter)
+        float(answer_option(text, choices) == letter)
         for text, letter, choices in zip(texts, gold, options, strict=True)
     ]
 
@@ -55,7 +56,7 @@ class GRPORewardAdapter:
     """Expose an existing reward as a custom GRPO reward callable.
 
     All views exclude private thinking: the visible completion, its explanation
-    excluding the final answer line, or the selected option text.
+    excluding the final answer line, or generated answer text (resolving bare labels).
     ``invalid_score`` is explicit because zero is not a floor for every reward.
     This class does not normalize/weight rewards or implement GRPO optimization.
     """
@@ -94,8 +95,7 @@ class GRPORewardAdapter:
             elif self.candidate_view == "reasoning":
                 candidate = reasoning_text(completion, option_count=len(choices))
             else:
-                letter = parse_answer(completion, option_count=len(choices))
-                candidate = choices[ord(letter) - 65] if letter is not None else None
+                candidate = generated_answer(completion, choices)
             candidates.append(candidate)
         usable = [
             i for i, text in enumerate(candidates) if text is not None and text.strip()
@@ -105,7 +105,7 @@ class GRPORewardAdapter:
             values = checked_scores(
                 self.reward.score(
                     [candidates[i] for i in usable],
-                    references=[references[i] for i in usable],
+                    references=[reference_answer(references[i]) for i in usable],
                     prompts=[prompts[i] for i in usable],
                 ),
                 len(usable),

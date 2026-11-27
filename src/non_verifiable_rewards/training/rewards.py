@@ -12,11 +12,28 @@ from ..rewards.base import checked_scores
 from ..completions import answer_text, decode_completions
 from ..inference import use_vllm
 from ..rewards.prompts import make_reference_context, task_for_dataset
-from ..reasoning.evaluation import parse_answer, reasoning_text
+from ..reasoning.answers import answer_option, generated_answer, reference_answer
+from ..reasoning.evaluation import reasoning_text
 from .assets import resolve_hf, bleurt_path, nlp_path
 from .data import policy_prompt
 
 LM_REWARDS = {"reference_likelihood", "vr_cli", "nover", "self_certainty", "llm_judge"}
+
+
+def reward_candidate(row, completion, view="auto"):
+    """Use generated answer text for SuperGPQA, visible completions otherwise."""
+    completion = answer_text(completion)
+    if view == "auto":
+        view = "answer_text" if row["dataset"] == "supergpqa" else "completion"
+    if view == "completion":
+        return completion
+    if row["dataset"] != "supergpqa":
+        raise ValueError("Reasoning/answer views require SuperGPQA")
+    if view == "reasoning":
+        return reasoning_text(completion, option_count=len(row["options"]))
+    if view == "answer_text":
+        return generated_answer(completion, row["options"])
+    raise ValueError(f"Unknown candidate view: {view}")
 
 
 class RewardFactory:
@@ -170,7 +187,7 @@ class RewardFactory:
         self.cache[key] = reward
         return reward
 
-    def score(self, name, rows, completions, view="completion"):
+    def score(self, name, rows, completions, view="auto"):
         if len(rows) != len(completions):
             raise ValueError("Rows and completions must align")
         values = [float(self.options["invalid_score"])] * len(rows)
@@ -186,24 +203,12 @@ class RewardFactory:
                 if row["dataset"] != "supergpqa":
                     raise ValueError("Answer accuracy is only defined for SuperGPQA")
                 values[i] = float(
-                    parse_answer(completion, option_count=len(row["options"]))
+                    answer_option(completion, row["options"])
                     == row["answer_letter"]
                 )
                 candidates.append(None)
                 continue
-            candidate = completion
-            if view != "completion":
-                if row["dataset"] != "supergpqa":
-                    raise ValueError("Reasoning/answer views require SuperGPQA")
-                if view == "reasoning":
-                    candidate = reasoning_text(
-                        completion, option_count=len(row["options"])
-                    )
-                elif view == "answer_text":
-                    letter = parse_answer(completion, option_count=len(row["options"]))
-                    candidate = row["options"][ord(letter) - 65] if letter else None
-                else:
-                    raise ValueError(f"Unknown candidate view: {view}")
+            candidate = reward_candidate(row, completion, view)
             candidates.append(candidate)
             if candidate and candidate.strip():
                 groups[row["dataset"]].append(i)
@@ -221,7 +226,11 @@ class RewardFactory:
                 scores = checked_scores(
                     reward.score(
                         [candidates[i] for i in indices],
-                        references=[rows[i]["reference"] for i in indices],
+                        references=[
+                            reference_answer(rows[i]["reference"])
+                            if dataset == "supergpqa" else rows[i]["reference"]
+                            for i in indices
+                        ],
                         prompts=[rows[i]["prompt"] for i in indices],
                     ),
                     len(indices),
@@ -238,7 +247,7 @@ class RewardClient:
         self.config, self.log_dir = config, Path(log_dir)
         self.workers = {}
 
-    def score(self, name, rows, completions, view="completion"):
+    def score(self, name, rows, completions, view="auto"):
         family = "bleurt" if name in ("bleurt", "smart1_bleurt") else "torch"
         if family not in self.workers:
             self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -410,8 +419,15 @@ class WeightedReward:
         ]
         total = [0.0] * count
         components = {}
+        candidates = {}
         consistency_details = None
         for name, weight in self.run["rewards"].items():
+            default_view = "completion" if name == "self_consistency" else "auto"
+            view = self.run.get("candidate_views", {}).get(name, default_view)
+            candidates[name] = [
+                reward_candidate(row, text, view)
+                for row, text in zip(rows, completions, strict=True)
+            ]
             if name == "self_consistency":
                 if self.self_consistency is None:
                     raise ValueError(
@@ -447,7 +463,7 @@ class WeightedReward:
                     name,
                     rows,
                     completions,
-                    self.run.get("candidate_views", {}).get(name, "completion"),
+                    view,
                 )
             values = checked_scores(values, count)
             components[name] = values
@@ -459,16 +475,9 @@ class WeightedReward:
         # to the combined reward, independent of component weights.
         for i, (row, completion) in enumerate(zip(rows, completions, strict=True)):
             invalid = not completion.strip()
-            for view in self.run.get("candidate_views", {}).values():
-                if view == "answer_text":
-                    invalid |= (
-                        parse_answer(completion, option_count=len(row["options"]))
-                        is None
-                    )
-                elif view == "reasoning":
-                    invalid |= not reasoning_text(
-                        completion, option_count=len(row["options"])
-                    )
+            invalid |= any(
+                not texts[i] or not texts[i].strip() for texts in candidates.values()
+            )
             # The standalone binary reward already assigns zero to invalid
             # outputs. Mixtures retain the existing explicit failure floor.
             if invalid and set(self.run["rewards"]) != {"self_consistency"}:
@@ -486,6 +495,7 @@ class WeightedReward:
                         "datasets": dataset,
                         "completions": raw_completions,
                         "reward_inputs": completions,
+                        "reward_candidates": candidates,
                         "components": components,
                         "weights": self.run["rewards"],
                         "total": total,
