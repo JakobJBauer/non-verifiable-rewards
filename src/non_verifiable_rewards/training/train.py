@@ -10,6 +10,7 @@ from ..inference import configure_vllm, grpo_inference_options, use_vllm
 from .assets import policy_path
 from .data import training_dataset
 from .rewards import RewardClient, WeightedReward
+from .tracking import tracking_run
 from .state import (
     assert_single_process,
     checkpoint_manifest,
@@ -168,14 +169,18 @@ def train_run(config, run):
             chat_template_kwargs={"enable_thinking": policy["enable_thinking"]},
             mask_truncated_completions=False,
             remove_unused_columns=False,
-            report_to="none",
+            report_to="wandb" if config["wandb"]["enabled"] else "none",
+            run_name=run["name"],
             push_to_hub=False,
             eval_strategy="no",
             save_strategy="steps",
             dataloader_num_workers=0,
         )
         dataset = training_dataset(config, run, tokenizer)
-        with RewardClient(config, target / "logs") as client:
+        with (
+            tracking_run(config, run, target),
+            RewardClient(config, target / "logs") as client,
+        ):
             callback = WeightedReward(
                 client,
                 run,

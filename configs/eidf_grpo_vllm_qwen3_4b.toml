@@ -3,6 +3,11 @@
 output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_vllm_qwen3_4b"
 cache_dir = "/root/.cache/non-verifiable-rewards"
 
+[wandb]
+enabled = true
+project = "non-verifiable rewards"
+entity = ""  # Use the authenticated account's default entity.
+
 [policy]
 enable_thinking = true
 

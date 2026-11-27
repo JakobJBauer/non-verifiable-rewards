@@ -80,6 +80,7 @@ def main(argv=None):
                     "inference": config["inference"],
                     "runs": runs,
                     "optimization": config["optimization"],
+                    "wandb": config["wandb"],
                     "data": config["data"],
                     "benchmark": config["benchmark"],
                     "self_consistency": config["self_consistency"],

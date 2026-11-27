@@ -699,6 +699,37 @@ def test_self_consistency_preserves_standard_grpo_loss(
     callback.self_consistency = None
 
 
+def test_wandb_offline_receives_real_grpo_metrics_and_finishes(tiny_sweep, monkeypatch):
+    wandb = pytest.importorskip("wandb")
+    from non_verifiable_rewards.training.train import train_run
+
+    config, tokenizer = tiny_sweep
+    config["optimization"]["max_steps"] = 1
+    config["wandb"].update(enabled=True, mode="offline")
+    captured = []
+    original = wandb.sdk.wandb_run.Run.log
+
+    def record(self, data, *args, **kwargs):
+        captured.append(dict(data))
+        return original(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(wandb.sdk.wandb_run.Run, "log", record)
+    root = ensure_sweep(config)
+    prepare(config, tokenizer)
+    train_run(config, config["runs"][0])
+    assert wandb.run is None
+    identity = json.loads((root / "runs/mixed/wandb.json").read_text())
+    assert identity["project"] == "non-verifiable rewards"
+    assert list((root / "runs/mixed/wandb").glob(f"offline-run-*/run-{identity['id']}.wandb"))
+    keys = {key for record in captured for key in record}
+    assert {
+        "train/global_step", "train/loss", "train/reward", "train/kl",
+        "train/component/length", "train/component/rouge_l",
+        "train/completions/mean_length",
+    } <= keys
+    assert any(record.get("train/global_step") == 1 for record in captured)
+
+
 def test_real_grpo_resume_export_reload_and_benchmark(tiny_sweep, monkeypatch):
     from trl import GRPOTrainer
     from transformers import TrainerCallback, AutoModelForCausalLM

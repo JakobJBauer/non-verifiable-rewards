@@ -1027,6 +1027,23 @@ nvtx = [
 ]
 
 [[package]]
+name = "cwevals"
+version = "0.0.1b3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d9/c3/f55a9932e883c768ff8abc1e9bf61d946caa30a5a5e2d580176614cd072a/cwevals-0.0.1b3.tar.gz", hash = "sha256:2647ffa8338634db70e9cbd1d9232f0a62f2b7d7b2c5d8a2f0bb750d4aeced45", size = 289503, upload-time = "2026-10-28T19:00:06.105Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/d0/89df787a28354209df959267b24a56cd6ade8709098e146f286f1ac320e6/cwevals-0.0.1b3-py3-none-any.whl", hash = "sha256:3ff43ebab38a553877da8951305924a39a6f30809aae7f567de9ed1104d7ef15", size = 261626, upload-time = "2026-10-28T19:00:04.613Z" },
+]
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1132,6 +1149,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
+]
+
+[[package]]
+name = "distro"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
 ]
 
 [[package]]
@@ -3151,6 +3177,7 @@ training = [
     { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
     { name = "transformers" },
     { name = "trl" },
+    { name = "wandb" },
 ]
 vllm = [
     { name = "vllm", marker = "sys_platform == 'linux'" },
@@ -3185,6 +3212,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'training'", specifier = ">=5,<6" },
     { name = "trl", marker = "extra == 'training'", specifier = "==1.18.2" },
     { name = "vllm", marker = "sys_platform == 'linux' and extra == 'vllm'", specifier = "==0.23.0" },
+    { name = "wandb", marker = "extra == 'training'", specifier = ">=0.19,<1" },
 ]
 provides-extras = ["benchmark", "bertscore", "lm", "training", "vllm", "bleurt"]
 
@@ -5763,7 +5791,6 @@ dependencies = [
     { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
     { name = "psutil" },
-    { name = "setuptools", version = "80.10.2", source = { registry = "https://pypi.org/simple" }, marker = "python_version < '0'" },
     { name = "torch", version = "2.11.0", source = { registry = "https://pypi.org/simple" } },
     { name = "torch-c-dlpack-ext", marker = "python_full_version < '3.14'" },
     { name = "tqdm" },
@@ -6314,6 +6341,37 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/26/c66d588cc14f91d020294ecddaefe4ce698abdcb140612feec36a4c0aecd/vllm-0.23.0-2-cp38-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:872aeb7c36a1ea942216af067ce870ffdf960804e829367e1b4eb36d4831c03c", size = 274070565, upload-time = "2026-06-15T05:12:54.416Z" },
     { url = "https://files.pythonhosted.org/packages/1e/5a/93830f6509aef185ddac04e9ce78fa4382d3037ec76ecd18b6455a5a4f4b/vllm-0.23.0-cp38-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:6a1a534f81f0b62f53d73faa68c73dfae540292ace7f97baf30dbac94fe90f2c", size = 265953967, upload-time = "2026-06-13T09:27:50.84Z" },
     { url = "https://files.pythonhosted.org/packages/72/bc/652f889cde1a20585a0ee0b1b6d36109cd8177bb60020dcb8ff477448440/vllm-0.23.0-cp38-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:71eae985c79ddaa999328cc56d206a1e9b785e079fc6da9e2359ec56ef1c842a", size = 274070208, upload-time = "2026-06-13T09:28:16.037Z" },
+]
+
+[[package]]
+name = "wandb"
+version = "0.31.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "cwevals" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-common" },
+    { name = "opentelemetry-sdk" },
+    { name = "packaging" },
+    { name = "platformdirs" },
+    { name = "protobuf" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "xxhash" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/14/07/20b18fd0d9045373b9c4302cab690508b59345940f0ac58e045d858a253c/wandb-0.31.2.tar.gz", hash = "sha256:27b093559e0d46600df5f06416d4b2491ae35eae5f9a60bc5d8f8df1284a882a", size = 40820665, upload-time = "2026-11-21T01:10:09.274Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/1f/f45fc807353ab88894b0bc5f6b9f06e6136a9e7624945ca7ea2024f6dc7f/wandb-0.31.2-py3-none-macosx_13_0_arm64.whl", hash = "sha256:8e4afd2684847f747a3b4b745191659d5bd9fa0ba478cde9f45e165cb1e3dcdf", size = 18869486, upload-time = "2026-11-21T01:09:45.003Z" },
+    { url = "https://files.pythonhosted.org/packages/79/b1/4d46f6f909a919d2d2872a1b4ff3a95b41ae14981afdbfa8c3c2660778de/wandb-0.31.2-py3-none-macosx_13_0_x86_64.whl", hash = "sha256:4dce3c91cb58c09610f20f2558cb296ed75ec8ea207b69689fb7676e9eb4a8c7", size = 20399394, upload-time = "2026-11-21T01:09:48.27Z" },
+    { url = "https://files.pythonhosted.org/packages/32/3e/737202c4143fe2bb4de6b53dd7775c7a1b8415fb4f3358d0c4075777debb/wandb-0.31.2-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:809f513214589958fddc3e86b98694009ff1222f16445c6b1509aa10ef84931c", size = 19007073, upload-time = "2026-11-21T01:09:51.176Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/de/3e273dd52abdcdf6f3f42587624c3af4a5aa5874a4ad7484b33ef51eefdf/wandb-0.31.2-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:d47d0c5ebcb5f91e4acb5e1546a8f553fa9e5590629c2fe24e666b98dc5ca3fb", size = 20852411, upload-time = "2026-11-21T01:09:53.949Z" },
+    { url = "https://files.pythonhosted.org/packages/86/3e/b64dd7430511eea8d8f4550d57171c861dd4a0e9452fed26417d0cd32efe/wandb-0.31.2-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:0a0227581a6f412430ce2b70d4932259f1423fa5034ca4a6789a8904a1142ab4", size = 19111796, upload-time = "2026-11-21T01:09:57.325Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/bb/02b0b2e6d69829c12dbc58dcabc89e525f88cc7936cdcee8ae89c76ca3fb/wandb-0.31.2-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:ba2bc69e062c1b4d7898cd8ff7b579bf261d2895ebced84e95467958dab1c122", size = 21029315, upload-time = "2026-11-21T01:10:00.091Z" },
+    { url = "https://files.pythonhosted.org/packages/95/c9/61db514817fd1763146bb026be2ecf833547f1a1287c98441bfe0f95defa/wandb-0.31.2-py3-none-win_amd64.whl", hash = "sha256:07e67ac5c14aa43d6dea150a6100df479b47f9092c384b730b1f3407d1fdd542", size = 20127113, upload-time = "2026-11-21T01:10:03.059Z" },
+    { url = "https://files.pythonhosted.org/packages/44/62/d411678a59d543fac18bcb3db5f4abeca498209fff95916d06680b1cac72/wandb-0.31.2-py3-none-win_arm64.whl", hash = "sha256:81663b302e0f4e6092f8131543819d268f1cc7edfbeb0a9f989e835a54430927", size = 18434495, upload-time = "2026-11-21T01:10:05.791Z" },
 ]
 
 [[package]]

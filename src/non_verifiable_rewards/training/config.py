@@ -18,6 +18,12 @@ DEFAULTS = {
     "output_dir": "outputs/grpo_qwen3_4b",
     "cache_dir": "artifacts/cache",
     "seed": 1729,
+    "wandb": {
+        "enabled": False,
+        "project": "non-verifiable rewards",
+        "entity": "",
+        "mode": "online",
+    },
     "inference": {
         "backend": "auto",
         "gpu_memory_utilization": 0.35,
@@ -143,12 +149,32 @@ def validate_config(raw):
         "reward_models",
         "benchmark",
         "inference",
+        "wandb",
     ):
         config[section] = _merge(DEFAULTS[section], raw.get(section, {}), section)
     config["judge"] = validate_judge_config(raw.get("judge", {}))
     config["self_consistency"] = validate_self_consistency_config(
         raw.get("self_consistency", {})
     )
+    tracking = config["wandb"]
+    if not isinstance(tracking["enabled"], bool):
+        raise ValueError("wandb.enabled must be boolean")
+    project = tracking["project"]
+    if (
+        not isinstance(project, str)
+        or not project.strip()
+        or project != project.strip()
+        or len(project) > 128
+        or any(char in project for char in "/\\#?%:")
+    ):
+        raise ValueError("Invalid wandb.project")
+    if (
+        not isinstance(tracking["entity"], str)
+        or tracking["entity"] != tracking["entity"].strip()
+    ):
+        raise ValueError("wandb.entity must be an account/team name or an empty string")
+    if tracking["mode"] not in ("online", "offline"):
+        raise ValueError("wandb.mode must be online or offline")
     inference = config["inference"]
     if inference["backend"] not in ("auto", "transformers", "vllm"):
         raise ValueError("inference.backend must be auto, transformers or vllm")
