@@ -13,7 +13,7 @@ from ..data import (
 )
 from ..experiments.data import sample_pairs
 from ..experiments.io import read_jsonl, write_json, write_jsonl
-from ..rewards.prompts import translation_prompt
+from ..rewards.prompts import multiple_choice_text_prompt, translation_prompt
 from .state import ensure_sweep, verify_data
 
 
@@ -32,7 +32,7 @@ def policy_prompt(dataset, prompt):
         prefix = "Translate the following German text into English:\n\n"
         return translation_prompt(prompt.removeprefix(prefix))
     if dataset == "supergpqa":
-        return prompt  # Loader already includes options and the final-answer format.
+        return multiple_choice_text_prompt(prompt)
     raise ValueError(f"Unknown task: {dataset}")
 
 
@@ -149,17 +149,20 @@ def prepare(config, tokenizer):
     if (root / "data_manifest.json").exists():
         return verify_data(root)
     files, sources, counts = {}, {}, {}
+    training_names = {name for run in config["runs"] for name in run["datasets"]}
     for name in config["data"]["datasets"]:
-        train, train_meta = load_split(config, name, "train")
         test, test_meta = load_split(config, name, "test")
         test = list(test)
-        train, excluded = sample_train(
-            train,
-            config["data"]["train_examples_per_dataset"],
-            config["seed"],
-            tokenizer,
-            config,
-        )
+        train, train_meta, excluded = [], {"training_enabled": False}, {}
+        if name in training_names:
+            train, train_meta = load_split(config, name, "train")
+            train, excluded = sample_train(
+                train,
+                config["data"]["train_examples_per_dataset"],
+                config["seed"],
+                tokenizer,
+                config,
+            )
         train_texts = {" ".join(r["prompt"].split()) for r in train}
         train_ids = {r["prompt_id"] for r in train}
         if any(

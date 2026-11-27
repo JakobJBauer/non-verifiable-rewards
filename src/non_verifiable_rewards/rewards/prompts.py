@@ -44,6 +44,16 @@ def translation_prompt(source: str) -> str:
     return _TRANSLATION_INSTRUCTION + source.strip()
 
 
+def multiple_choice_text_prompt(prompt: str) -> str:
+    """Request a written-out answer without exposing which option is correct."""
+    return (
+        "Answer the following multiple-choice question. There is exactly one correct "
+        "option. Return only the final answer in the format 'Answer: <answer text>', "
+        "using the text of your selected option.\n\n"
+        + prompt.removeprefix(_MULTIPLE_CHOICE_INSTRUCTION)
+    )
+
+
 def task_for_dataset(dataset: str) -> Task:
     try:
         return _TASKS[dataset]
