@@ -85,9 +85,10 @@ def test_mixture_preserves_batch_alignment_raw_reasoning_and_signed_weights(tmp_
             return {"chrf_pp": [10, 80], "length": [4, 2]}[name]
 
     tokenizer = SimpleNamespace(
+        all_special_ids=[],
         batch_decode=lambda ids, **kwargs: [
-            "Rationale A\nAnswer: B",
-            "Rationale B\nAnswer: A",
+            "<think>Private A</think>\nRationale A\nAnswer: B",
+            "<think>Private B</think>\nRationale B\nAnswer: A",
         ]
     )
     run = {
@@ -108,11 +109,12 @@ def test_mixture_preserves_batch_alignment_raw_reasoning_and_signed_weights(tmp_
     )
     assert callback(**kwargs) == pytest.approx([-0.3, 0.6])
     assert calls[0][1][1]["reference"] == "Gold2"
-    assert calls[0][2][0].startswith("Rationale A")
+    assert calls[0][2] == ["Rationale A\nAnswer: B", "Rationale B\nAnswer: A"]
     assert calls[0][3] == "answer_text"
-    assert json.loads((tmp_path / "trace.jsonl").read_text())["components"][
-        "length"
-    ] == [4.0, 2.0]
+    trace = json.loads((tmp_path / "trace.jsonl").read_text())
+    assert trace["components"]["length"] == [4.0, 2.0]
+    assert trace["completions"][0].startswith("<think>Private A</think>")
+    assert trace["reward_inputs"] == calls[0][2]
     kwargs["reference"] = ["one"]
     with pytest.raises(ValueError, match="aligned"):
         callback(**kwargs)
@@ -153,14 +155,43 @@ def test_factory_routes_mixed_tasks_and_keeps_invalid_positions(tmp_path, monkey
     assert factory.score("length", [row], ["Work\nAnswer: B"], "answer_text") == [5]
 
 
-def test_invalid_completion_penalty_cannot_flip_sign_in_a_mixture(tmp_path):
+@pytest.mark.parametrize("reward_name", REWARDS)
+@pytest.mark.parametrize("view", ["completion", "reasoning", "answer_text"])
+def test_every_reward_view_ignores_private_thinking(monkeypatch, reward_name, view):
+    factory = RewardFactory(validate_config({}))
+    seen = []
+
+    class Reward:
+        def score(self, texts, **kwargs):
+            seen.extend(texts)
+            return [0.75] * len(texts)
+
+    monkeypatch.setattr(factory, "get", lambda *args: Reward())
+    row = dict(
+        dataset="supergpqa", prompt="Q", reference="right",
+        options=["wrong", "right"], answer_letter="B",
+    )
+    final = "Visible explanation\nAnswer: B"
+    texts = [
+        final, "<think>Answer: A</think>" + final,
+        "<think>A much longer private plan</think>" + final,
+        "<think>Unfinished\nAnswer: B", "<think>Answer: B</think>",
+    ]
+    assert factory.score(reward_name, [row] * 5, texts, view) == [0.75] * 3 + [-1000] * 2
+    expected = {"completion": final, "reasoning": "Visible explanation", "answer_text": "right"}[view]
+    assert seen == [expected] * 3
+    assert factory.score("answer_accuracy", [row] * 5, texts) == [1, 1, 1, 0, 0]
+
+
+@pytest.mark.parametrize("completion", ["", "<think>Unfinished", "<think>Done</think>"])
+def test_invalid_completion_penalty_cannot_flip_sign_in_a_mixture(tmp_path, completion):
     client = SimpleNamespace(score=lambda *args: [-1000.0])
     callback = WeightedReward(
         client, {"rewards": {"length": -1}}, None, tmp_path / "trace.jsonl"
     )
     assert callback(
         prompts=["p"],
-        completions=[""],
+        completions=[completion],
         source_prompt=["p"],
         dataset=["reddit_tldr"],
         reference=["r"],
@@ -420,7 +451,7 @@ def test_fixed_qwen_rewards_share_frozen_weights_and_task_rubrics(
         factory.get("self_certainty", "litbench").context_builder("story")
         == "serialized prompt"
     )
-    assert calls[0][1]["enable_thinking"] is True
+    assert calls[0][1]["enable_thinking"] is False
     assert "standalone story" in calls[0][0][0]["content"]
 
 
@@ -502,9 +533,11 @@ def test_grpo_loss_and_kl_use_exact_rollout_tokens_in_both_modes(
         mask = batch["completion_mask"][i].bool()
         assert batch["completion_ids"][i][mask].tolist() == trace
         assert batch["prompt_ids"][i][batch["prompt_mask"][i].bool()].tolist() == expected_prompt
-    assert captured == tokenizer.batch_decode(traces, skip_special_tokens=True)
-    if thinking:
-        assert "<think>" in captured[0] and "good story" in captured[0]
+    assert captured == (["summary", ""] if thinking else strings)
+    trace_log = json.loads(callback.trace_path.read_text())
+    assert trace_log["completions"] == tokenizer.batch_decode(traces, skip_special_tokens=True)
+    assert trace_log["reward_inputs"] == captured
+    assert trace_log["total"] == ([1.0, -1000.0] if thinking else [1.0, 0.0])
     # Recompute reference likelihood independently on the full raw trajectory.
     with torch.no_grad():
         for i, trace in enumerate(traces):
@@ -524,6 +557,50 @@ def test_grpo_loss_and_kl_use_exact_rollout_tokens_in_both_modes(
     assert torch.isfinite(loss)
     assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in model.parameters())
     assert torch.equal(forwards[-1], torch.cat([batch["prompt_ids"], batch["completion_ids"]], dim=1))
+
+
+def test_benchmark_scores_only_answers_and_preserves_raw_generations(tiny_sweep, monkeypatch):
+    from non_verifiable_rewards.training import benchmark
+
+    config, tokenizer = tiny_sweep
+    # Some tokenizers remove these tags with skip_special_tokens=True.
+    tokenizer.add_special_tokens({"additional_special_tokens": ["<think>", "</think>"]})
+    root = ensure_sweep(config)
+    prepare(config, tokenizer)
+    target = root / "benchmarks/base"
+    target.mkdir(parents=True)
+    traces = [
+        tokenizer.encode("<think> private story </think> good summary", add_special_tokens=False),
+        tokenizer.encode("<think> bad story", add_special_tokens=False),
+    ]
+    traces[0].append(tokenizer.eos_token_id)
+    scorer = SimpleNamespace(
+        tokenizer=tokenizer,
+        generation_config=SimpleNamespace(eos_token_id=tokenizer.eos_token_id),
+        generate_ids=lambda *args, **kwargs: traces,
+        log_likelihood=lambda *args, **kwargs: [-1.0, -2.0],
+    )
+    benchmark._generate(config, target, scorer)
+    outputs = [json.loads(line) for line in (target / "generations.jsonl").read_text().splitlines()]
+    assert [row["token_ids"] for row in outputs] == traces
+    assert [row["tokens"] for row in outputs] == list(map(len, traces))
+    assert "<think>" in outputs[0]["completion"]
+    assert [row["reward_input"] for row in outputs] == ["good summary", ""]
+    calls = []
+    factory = RewardFactory(config)
+
+    def score(client, name, rows, texts):
+        calls.append((name, texts))
+        return factory.score(name, rows, texts)
+
+    monkeypatch.setattr(RewardClient, "score", score)
+    monkeypatch.setattr(benchmark, "benchmark_identity", lambda *args: (target, None))
+    benchmark.score_generations(config, "base")
+    assert calls == [(name, ["good summary", ""]) for name in config["benchmark"]["rewards"]]
+    for name in config["benchmark"]["rewards"]:
+        scores = [json.loads(line)["score"] for line in (target / f"scores/{name}.jsonl").read_text().splitlines()]
+        assert scores == factory.score(name, [dict(dataset="reddit_tldr", prompt="P", reference="gold summary")] * 2, ["good summary", ""])
+        assert scores[1] == -1000
 
 
 def test_real_grpo_resume_export_reload_and_benchmark(tiny_sweep, monkeypatch):

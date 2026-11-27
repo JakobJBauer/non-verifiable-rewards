@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 
 from .._hashing import file_sha256
+from ..completions import answer_text, decode_completions
 from ..experiments.io import Journal, read_jsonl, write_json
 from ..inference.policy import policy_backend
 from .assets import policy_path
@@ -101,13 +102,14 @@ def _generate(config, target, scorer):
                 seconds = (time.perf_counter() - start) / len(batch)
                 for row, ids in zip(batch, completions, strict=True):
                     key = sample_key(row)
-                    completion = tokenizer.decode(ids, skip_special_tokens=True)
+                    completion = decode_completions(tokenizer, [ids])[0]
                     outputs.append(
                         {
                             "pair_id": key,
                             "dataset": dataset,
                             "prompt_id": row["prompt_id"],
                             "completion": completion,
+                            "reward_input": answer_text(completion),
                             "token_ids": ids,
                             "tokens": len(ids),
                             "words": len(completion.split()),
@@ -212,7 +214,7 @@ def score_generations(config, name):
                     for start in range(0, len(pending), batch_size):
                         batch = pending[start : start + batch_size]
                         completions = [
-                            outputs[sample_key(row)]["completion"] for row in batch
+                            outputs[sample_key(row)]["reward_input"] for row in batch
                         ]
                         scores = client.score(reward, batch, completions)
                         for row, score in zip(batch, scores, strict=True):

@@ -72,11 +72,11 @@ returns source provenance and split counts.
 | Reward family | Recommended candidate view | Interpretation |
 | --- | --- | --- |
 | Exact answer accuracy | Parsed final letter | Verifiable 0/1 outcome baseline |
-| Reference likelihood, VR-CLI, NOVER proxy | Reasoning before the final answer line, against correct option text | Whether a scoring model finds the known answer more likely given the candidate rationale |
+| Reference likelihood, VR-CLI, NOVER proxy | Visible explanation before the final answer line, against correct option text | Whether a scoring model finds the known answer more likely given the candidate explanation |
 | ROUGE-L, chrF++, METEOR, BERTScore, BLEURT, SMART | Text of the selected option, against correct option text | Answer agreement/similarity; not an assessment of the rationale |
-| Self-certainty | Complete generated response under its generation prompt | Model certainty, which can be high on incorrect reasoning |
-| LLM judge | Complete generated response, with question and correct option text | Rubric-based assessment of answer correctness and any supplied reasoning; a model judgment, not verification |
-| Length | Complete response or rationale, declared explicitly | A length control, not correctness |
+| Self-certainty | Visible answer under the task prompt with thinking disabled | Model certainty, which can be high on incorrect answers |
+| LLM judge | Visible answer, with question and correct option text | Rubric-based assessment of answer correctness and any visible explanation; a model judgment, not verification |
+| Length | Visible answer or explanation, declared explicitly | A length control, not correctness |
 
 For likelihood rewards, select `task="multiple_choice"`. The context asks for
 the text of the selected option, conditions on the proposed solution, and scores
@@ -128,10 +128,12 @@ change the question from “can this reward improve accuracy?” to “does it a
 correctness supervision?”. Do not add it implicitly through the adapter.
 
 The adapter supports `candidate_view="completion"`, `"reasoning"`, and
-`"answer_text"`. The reasoning view removes a valid final `Answer: X` line and
-literal `<think>` delimiters. Answer-only outputs have no reasoning and receive
-the explicit `invalid_score` in that view. Full-completion views can score
-nonconforming answers; the benchmark still counts them as invalid.
+`"answer_text"`. Every view first removes the private thinking trace through
+`</think>`. The reasoning view then removes a valid final `Answer: X` line,
+leaving only the visible explanation. Outputs without a visible explanation
+receive the explicit `invalid_score` in that view. Unclosed thinking or empty
+answers receive `invalid_score` in every view. The completion view can score
+nonconforming visible answers; the accuracy benchmark still counts them as invalid.
 
 Set `invalid_score` for the actual reward's scale: zero is a floor for ROUGE but
 can be *better* than valid negative BLEURT/log-likelihood values. The adapter
@@ -139,9 +141,11 @@ does not silently assume zero, rescale components, or supply missing references.
 It checks one finite score per usable completion and preserves batch positions.
 TRL repeats the extra dataset columns for each rollout; manually constructed
 batches must do the same. Single text user/assistant messages and plain strings
-are supported. Structured `thinking`, `reasoning_content`, or tool-call fields
-must be converted to the original decoded completion text; silently dropping
-those fields would change what is scored.
+are supported. Separate `thinking` and `reasoning_content` fields are excluded;
+only the assistant's `content` is scored. Tool-call messages are unsupported.
+For raw text, preserve `<think>` delimiters when decoding so the adapter can
+identify private traces. The training launcher handles this directly from token
+IDs, while keeping the original rollout IDs for the loss and reference KL.
 
 The [GRPO training launcher](grpo_training.md) connects these data and rewards
 to configurable training runs, saved models and held-out generated-answer

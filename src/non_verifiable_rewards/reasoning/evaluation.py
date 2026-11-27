@@ -3,6 +3,8 @@
 import re
 from collections import defaultdict
 
+from ..completions import answer_text
+
 _FINAL_ANSWER = re.compile(r"Answer:\s*([A-J])\.?", re.IGNORECASE)
 
 
@@ -16,6 +18,9 @@ def parse_answer(completion, *, option_count=10):
         raise ValueError("option_count must be between 2 and 10")
     if not isinstance(completion, str) or not completion.strip():
         return None
+    completion = answer_text(completion)
+    if not completion.strip():
+        return None
     match = _FINAL_ANSWER.fullmatch(completion.strip().splitlines()[-1].strip())
     if match and ord(match[1].upper()) - 65 < option_count:
         return match[1].upper()
@@ -23,15 +28,16 @@ def parse_answer(completion, *, option_count=10):
 
 
 def reasoning_text(completion, *, option_count=10):
-    """Remove the validated final answer line and literal thinking delimiters.
+    """Return the visible explanation, excluding private thinking and answer line.
 
     The remaining text may still mention an answer; this is not a guarantee of
     answer-free reasoning. Invalid final formats return None, not a guessed span.
     """
     if parse_answer(completion, option_count=option_count) is None:
         return None
+    completion = answer_text(completion)
     text = "\n".join(completion.strip().splitlines()[:-1])
-    return text.replace("<think>", "").replace("</think>", "").strip()
+    return text.strip()
 
 
 def _summary(records):
@@ -99,7 +105,7 @@ def evaluate_answers(examples, predictions):
         for name, values in groups.items()
     }
     return {
-        "protocol": "strict_final_answer_line_v1",
+        "protocol": "strict_final_answer_line_v2",
         "split": sorted({row["metadata"]["split"] for row in examples}),
         "overall": _summary(details),
         "by_group": by_group,

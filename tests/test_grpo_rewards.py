@@ -17,8 +17,8 @@ class RecordingReward:
 @pytest.mark.parametrize(
     "view,expected",
     [
-        ("completion", "<think>Plan</think>\nAnswer: B"),
-        ("reasoning", "Plan"),
+        ("completion", "Explanation\nAnswer: B"),
+        ("reasoning", "Explanation"),
         ("answer_text", "Chosen option text"),
     ],
 )
@@ -30,7 +30,7 @@ def test_grpo_adapter_selects_intended_candidate_and_keeps_reward_columns(
     result = callback(
         prompts=[[{"role": "user", "content": "Question with options"}]],
         completions=[
-            [{"role": "assistant", "content": "<think>Plan</think>\nAnswer: B"}]
+            [{"role": "assistant", "content": "<think>Plan</think>\nExplanation\nAnswer: B"}]
         ],
         reference=["Gold option text"],
         options=[["Wrong", "Chosen option text"]],
@@ -100,11 +100,25 @@ def test_grpo_callback_fails_on_misalignment_and_nonfinite_scores():
         GRPORewardAdapter(reward, invalid_score=math.inf)
 
 
-def test_structured_reasoning_is_not_silently_discarded():
+@pytest.mark.parametrize("field", ["thinking", "reasoning_content"])
+def test_structured_reasoning_is_excluded_from_rewards(field):
+    reward = RecordingReward()
     callback = GRPORewardAdapter(
-        RecordingReward(), candidate_view="reasoning", invalid_score=-7
+        reward, candidate_view="completion", invalid_score=-7
     )
-    with pytest.raises(ValueError, match="discard generated text"):
+    assert callback(
+        prompts=["Q"], reference=["R"], options=[["A", "B"]],
+        completions=[[{
+            "role": "assistant", "content": "Answer: A",
+            field: "Private thinking stored separately",
+        }]],
+    ) == [0.75]
+    assert reward.calls == [(["Answer: A"], ["R"], ["Q"])]
+
+
+def test_tool_calls_are_not_text_reward_candidates():
+    callback = GRPORewardAdapter(RecordingReward(), invalid_score=-7)
+    with pytest.raises(ValueError, match="Tool-call"):
         callback(
             prompts=["Q"],
             reference=["R"],
@@ -114,8 +128,26 @@ def test_structured_reasoning_is_not_silently_discarded():
                     {
                         "role": "assistant",
                         "content": "Answer: A",
-                        "thinking": "Reasoning stored separately",
+                        "tool_calls": [{"name": "tool"}],
                     }
                 ]
             ],
         )
+
+
+@pytest.mark.parametrize("view", ["completion", "reasoning", "answer_text"])
+def test_private_thinking_cannot_supply_a_reward_candidate(view):
+    reward = RecordingReward()
+    callback = GRPORewardAdapter(reward, candidate_view=view, invalid_score=-7)
+    assert callback(
+        prompts=["Q"] * 2, reference=["R"] * 2, options=[["A", "B"]] * 2,
+        completions=["<think>Plan\nAnswer: B", "<think>Plan\nAnswer: B</think>"],
+    ) == [-7, -7]
+    assert reward.calls == []
+
+
+def test_private_answer_does_not_count_for_accuracy():
+    assert answer_accuracy_reward(
+        completions=["<think>Answer: B", "<think>Answer: B</think>\nAnswer: A"],
+        answer_letter=["B", "A"], options=[["A", "B"]] * 2,
+    ) == [0, 1]

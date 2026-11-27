@@ -138,8 +138,11 @@ append the expanded LM reward set to a historical run; judge scores cannot be
 derived from its saved reference likelihoods. New reports include judge
 preference agreement, ties, coverage, margin correlations and length effects.
 
-For SuperGPQA GRPO callbacks, keep the full solution so the judge can assess the
-answer and its reasoning together:
+For SuperGPQA GRPO callbacks, use the `completion` view so the judge can assess
+the final answer and any visible explanation together. All training and
+generated-output benchmark rewards exclude the policy's private `<think>` trace
+before constructing the judge input; this does not disable the judge's own
+optional thinking:
 
 ```python
 from non_verifiable_rewards.rewards import GRPORewardAdapter

@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from ..rewards.base import checked_scores
+from ..completions import answer_text, decode_completions
 from ..inference import use_vllm
 from ..rewards.prompts import make_reference_context, task_for_dataset
 from ..reasoning.evaluation import parse_answer, reasoning_text
@@ -79,7 +80,7 @@ class RewardFactory:
                         [{"role": "user", "content": policy_prompt(dataset, prompt)}],
                         tokenize=False,
                         add_generation_prompt=True,
-                        enable_thinking=self.config["policy"]["enable_thinking"],
+                        enable_thinking=False,
                     )
 
                 reward = reward_api.SelfCertaintyReward(
@@ -180,6 +181,7 @@ class RewardFactory:
                 raise ValueError(
                     "Completions must be text and references must be nonempty"
                 )
+            completion = answer_text(completion)
             if name == "answer_accuracy":
                 if row["dataset"] != "supergpqa":
                     raise ValueError("Answer accuracy is only defined for SuperGPQA")
@@ -352,15 +354,15 @@ class WeightedReward:
         completion_ids=None,
         **kwargs,
     ):
-        # Decode raw IDs so Transformers' structured reasoning parser cannot
-        # silently discard the rationale. No reference is passed to generation.
+        # Preserve thinking boundaries even when they are special tokens or
+        # Transformers separates reasoning into a structured field. The full
+        # rollout IDs remain untouched for the policy update.
         if completion_ids is not None:
-            completions = self.tokenizer.batch_decode(
-                completion_ids, skip_special_tokens=True
-            )
+            completions = decode_completions(self.tokenizer, completion_ids)
         from ..rewards.grpo import _texts
 
-        completions = _texts(completions, "assistant")
+        raw_completions = _texts(completions, "assistant")
+        completions = [answer_text(text) for text in raw_completions]
         count = len(completions)
         if not count:
             return []
@@ -438,7 +440,8 @@ class WeightedReward:
                         ),
                         "prompt_ids": prompt_id,
                         "datasets": dataset,
-                        "completions": completions,
+                        "completions": raw_completions,
+                        "reward_inputs": completions,
                         "components": components,
                         "weights": self.run["rewards"],
                         "total": total,

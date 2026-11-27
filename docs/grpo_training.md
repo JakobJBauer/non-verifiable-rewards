@@ -51,8 +51,9 @@ negative for explicit penalties. Reward scales are different: chrF++ uses
 and VR-CLI can be negative. Choose weights accordingly. No implicit per-metric
 standardization, clipping or ranking changes these formulas. TRL applies group
 centering and standard-deviation normalization **after** the weighted sum.
-Raw components, weights and totals are saved in `reward_trace.jsonl` and logged
-separately by the trainer. Empty responses and invalid selected answer/rationale
+Raw completions, answer-only `reward_inputs`, components, weights and totals are
+saved in `reward_trace.jsonl`; components are also logged by the trainer.
+Empty answers and invalid selected answer/explanation
 views receive the explicit `reward_models.invalid_score` (default −1000) on the
 combined reward, independent of weight signs. Backend errors/nonfinite values
 stop the run rather than becoming fabricated rewards. The finite invalid score
@@ -157,9 +158,11 @@ to generation evaluation, without inventing preference pairs. An
 `answer_accuracy` training reward is available for SuperGPQA-only runs.
 `candidate_views = {bertscore = "answer_text", reference_likelihood = "reasoning"}`
 selects the views already described in [the reasoning guide](supergpqa.md).
-The default view is the complete decoded output; raw token IDs are decoded so
-structured chat parsers cannot discard a reasoning field. Correct-option texts
-are not gold reasoning traces.
+All views first discard the policy's private thinking trace. The default
+`completion` view scores the entire visible answer after `</think>`; `reasoning`
+scores only its visible explanation before the final answer line. Raw token IDs
+are decoded while preserving thinking delimiters, even if the tokenizer marks
+them as special tokens. Correct-option texts are not gold reasoning traces.
 
 ## Policy and judge thinking
 
@@ -180,7 +183,8 @@ base/trained-policy benchmarks. Set it to `false` for a non-thinking policy.
 The preference-pair benchmark still teacher-forces each supplied candidate
 directly under that prompt; it does not generate or marginalize a reasoning
 trace for existing candidates.
-Training self-certainty uses the same policy prompt and thinking setting.
+Training self-certainty scores only visible answer tokens under the task prompt
+with `enable_thinking=False`, without conditioning on the policy's private trace.
 Reference-likelihood, VR-CLI and NOVER still score their answer targets with
 their fixed non-thinking reference prompts. The dated 20 November config
 retains its original `false` policy setting for historical reproducibility.
@@ -192,10 +196,11 @@ including reasoning, delimiters, final answer and EOS. Pinned TRL tokenizes
 the prompt once and passes those IDs to either generator. Its loss, old-policy
 log probabilities and reference-policy KL use the returned completion IDs
 directly, without reconstructing a chat conversation or dropping reasoning.
-Our reward callback also decodes those raw IDs, bypassing structured parsers
-that may separate reasoning from the answer. vLLM weight synchronization remains
-independent of thinking mode. CPU regressions exercise these token/mask and KL
-invariants through both TRL generation branches, including truncated thinking.
+Our reward callback decodes those raw IDs and extracts the visible answer for
+scoring only. The resulting reward still trains the entire sampled trajectory,
+so it can change the model's thinking behavior. vLLM weight synchronization
+remains independent of thinking mode. CPU regressions exercise these token/mask
+and KL invariants through both TRL generation branches, including truncated thinking.
 
 The judge has separate frozen parameters and its own independent setting.
 When enabled it generates a greedy rationale through `</think>`, then scores
@@ -205,11 +210,21 @@ failure handling. Choosing a non-thinking judge does not disable policy thinking
 
 The completion budget covers **reasoning plus answer**. Thinking may require a
 larger `optimization.max_completion_length` and `benchmark.max_new_tokens`;
-watch the benchmark's generation-limit rate. The existing full-completion
-reward view includes reasoning text, so lexical/length rewards can change when
-thinking is enabled. Choosing a reward view changes only scoring, never the
-tokens used for the policy update. Truncated rollouts retain their sampled
-tokens under the existing `mask_truncated_completions=False` setting.
+watch the benchmark's generation-limit rate. All generated-output rewards,
+including length and the judge, receive only text after the thinking trace.
+Untagged outputs are scored as written. Unclosed thinking blocks and empty
+post-thinking answers receive the invalid penalty (zero for standalone exact
+answer accuracy); negative mixture weights cannot reverse that penalty.
+The judge's own optional thinking remains independent of this input filtering.
+Choosing a reward view changes only scoring, never the tokens used for the
+policy update. Truncated rollouts retain their sampled tokens under the existing
+`mask_truncated_completions=False` setting. An answer truncated after `</think>`
+is scored as written, subject to the selected view's format requirements.
+
+Benchmarks save both the full `completion` and its `reward_input`, retaining all
+token IDs and full-generation length/limit diagnostics. Training and benchmark
+rewards use the same extraction rule. Use a fresh output directory for this
+scoring protocol; source hashes prevent resuming a sweep with the old rewards.
 The [thinking validation report](thinking_validation_20261126.md) records
 the CPU regressions and real Qwen3-4B checks on both backends.
 

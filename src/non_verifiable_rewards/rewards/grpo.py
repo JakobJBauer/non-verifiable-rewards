@@ -2,6 +2,7 @@
 
 import math
 
+from ..completions import answer_text
 from ..reasoning.evaluation import parse_answer, reasoning_text
 from .base import checked_scores, text_batch
 
@@ -21,14 +22,12 @@ def _texts(values, role):
             and value[0].get("role") == role
             and isinstance(value[0].get("content"), str)
         ):
-            if any(
-                value[0].get(key)
-                for key in ("thinking", "reasoning_content", "tool_calls")
-            ):
+            if value[0].get("tool_calls"):
                 raise ValueError(
-                    "Pass raw decoded completions when reasoning or tool calls are separate fields; "
-                    "scoring only content would discard generated text"
+                    "Tool-call messages are not supported by text rewards"
                 )
+            # Separate thinking/reasoning_content fields are private traces;
+            # only the assistant's visible content is a reward candidate.
             result.append(value[0]["content"])
         else:
             raise ValueError(
@@ -55,8 +54,8 @@ def answer_accuracy_reward(completions, answer_letter, options, **kwargs):
 class GRPORewardAdapter:
     """Expose an existing reward as a custom GRPO reward callable.
 
-    Views: full completion (e.g. self-certainty), rationale excluding the final
-    answer line (likelihood experiments), or selected option text (similarity).
+    All views exclude private thinking: the visible completion, its explanation
+    excluding the final answer line, or the selected option text.
     ``invalid_score`` is explicit because zero is not a floor for every reward.
     This class does not normalize/weight rewards or implement GRPO optimization.
     """
@@ -89,6 +88,7 @@ class GRPORewardAdapter:
             )
         candidates = []
         for completion, choices in zip(completions, options, strict=True):
+            completion = answer_text(completion)
             if self.candidate_view == "completion":
                 candidate = completion
             elif self.candidate_view == "reasoning":
