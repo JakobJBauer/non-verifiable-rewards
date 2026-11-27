@@ -603,6 +603,102 @@ def test_benchmark_scores_only_answers_and_preserves_raw_generations(tiny_sweep,
         assert scores[1] == -1000
 
 
+@pytest.mark.parametrize("backend", ["transformers", "vllm"])
+def test_self_consistency_preserves_standard_grpo_loss(
+    tiny_sweep, monkeypatch, backend
+):
+    """Real policy selection and backward; vLLM rollout IDs use a test double."""
+    import torch
+    from transformers import AutoModelForCausalLM
+    from trl import GRPOConfig, GRPOTrainer
+    from non_verifiable_rewards.rewards import SelfConsistencyReward
+    from non_verifiable_rewards.training.self_consistency import PolicySelector
+
+    config, tokenizer = tiny_sweep
+    tokenizer.add_tokens(["A", "B"])
+    prepare(config, tokenizer)
+    dataset = training_dataset(config, config["runs"][0], tokenizer)
+    model = AutoModelForCausalLM.from_pretrained(config["policy"]["id"])
+    model.resize_token_embeddings(len(tokenizer))
+    callback = WeightedReward(
+        None,
+        {"rewards": {"self_consistency": 1}},
+        tokenizer,
+        Path(config["output_dir"]) / "consistency-trace.jsonl",
+    )
+    trainer = GRPOTrainer(
+        model=model,
+        processing_class=tokenizer,
+        train_dataset=dataset,
+        reward_funcs=[callback],
+        args=GRPOConfig(
+            output_dir=str(Path(config["output_dir"]) / "consistency"),
+            use_cpu=True,
+            bf16=False,
+            report_to="none",
+            num_generations=2,
+            per_device_train_batch_size=2,
+            gradient_accumulation_steps=1,
+            max_completion_length=10,
+            beta=0.04,
+            loss_type="grpo",
+            scale_rewards="group",
+            chat_template_kwargs={"enable_thinking": True},
+            mask_truncated_completions=False,
+            remove_unused_columns=False,
+            vllm_importance_sampling_correction=False,
+        ),
+    )
+    callback.self_consistency = SelfConsistencyReward(
+        group_size=2,
+        selection_votes=9,
+        selector=PolicySelector(trainer),
+    )
+    traces = [
+        tokenizer.encode(text, add_special_tokens=False) + [tokenizer.eos_token_id]
+        for text in [
+            "<think> good story </think> summary",
+            "<think> bad story </think> answer",
+        ]
+    ]
+    if backend == "vllm":
+        trainer.use_vllm = True
+        trainer._last_loaded_step = -1
+        trainer.vllm_generation = SimpleNamespace(
+            generate=lambda prompts, **kw: (
+                prompts,
+                traces,
+                [[[-1.0]] * len(t) for t in traces],
+                None,
+                None,
+            ),
+            sync_weights=lambda: None,
+        )
+    else:
+        monkeypatch.setattr(
+            model,
+            "generate",
+            lambda input_ids, **kw: torch.cat([input_ids, torch.tensor(traces)], dim=1),
+        )
+    batch = trainer._generate_and_score_completions([dataset[0], dataset[0]])
+    record = json.loads(callback.trace_path.read_text())
+    rewards = torch.tensor(record["total"])
+    assert sorted(rewards.tolist()) == [0, 1]
+    torch.testing.assert_close(
+        batch["advantages"], (rewards - rewards.mean()) / (rewards.std() + 1e-4)
+    )
+    assert batch["completion_ids"].tolist() == traces
+    assert record["reward_inputs"] == ["summary", "answer"]
+    assert all(parameter.grad is None for parameter in model.parameters())
+    loss = trainer.compute_loss(model, batch)
+    loss.backward()
+    assert torch.isfinite(loss)
+    assert any(
+        p.grad is not None and p.grad.abs().sum() > 0 for p in model.parameters()
+    )
+    callback.self_consistency = None
+
+
 def test_real_grpo_resume_export_reload_and_benchmark(tiny_sweep, monkeypatch):
     from trl import GRPOTrainer
     from transformers import TrainerCallback, AutoModelForCausalLM

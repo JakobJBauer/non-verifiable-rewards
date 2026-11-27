@@ -1,0 +1,40 @@
+# Online majority pseudo-labels with standard GRPO, one run across all tasks.
+output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_self_consistency"
+cache_dir = "/root/.cache/non-verifiable-rewards"
+seed = 1729
+
+[policy]
+id = "Qwen/Qwen3-4B"
+revision = "1cfa9a7208912126459214e8b04321603b3df60c"
+device = "cuda"
+dtype = "bfloat16"
+lora = true
+enable_thinking = true
+
+[inference]
+backend = "transformers"
+
+[data]
+datasets = ["reddit_tldr", "litbench", "wmt14_de_en", "supergpqa"]
+train_examples_per_dataset = 4096
+max_prompt_tokens = 4096
+
+[optimization]
+num_generations = 8
+max_completion_length = 2048
+per_device_train_batch_size = 2
+gradient_accumulation_steps = 4
+
+[self_consistency]
+selection_votes = 8
+selection_temperature = 1.0
+max_context_tokens = 32768
+
+[benchmark]
+# Evaluate output quality independently; self_consistency is a grouped training
+# reward and cannot score the benchmark's one completion per prompt.
+rewards = ["rouge_l", "chrf_pp", "length"]
+
+[[runs]]
+name = "self_consistency"
+rewards = {self_consistency = 1.0}

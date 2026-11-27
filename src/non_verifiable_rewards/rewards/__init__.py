@@ -13,6 +13,7 @@ from .nover import NOVERReward
 from .reference_likelihood import ReferenceLikelihoodReward
 from .rouge_l import RougeLReward
 from .self_certainty import SelfCertaintyReward
+from .self_consistency import SelfConsistencyReward
 from .smart import SMART1BERTScoreReward, SMART1BLEURTReward
 from .vr_cli import VRCLIReward
 
@@ -31,6 +32,7 @@ __all__ = [
     "Reward",
     "RougeLReward",
     "SelfCertaintyReward",
+    "SelfConsistencyReward",
     "SMART1BERTScoreReward",
     "SMART1BLEURTReward",
     "VRCLIReward",

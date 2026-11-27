@@ -336,10 +336,20 @@ class WeightedReward:
 
     __name__ = "weighted_reward"
 
-    def __init__(self, client, run, tokenizer, trace_path, *, invalid_score=-1000.0):
+    def __init__(
+        self,
+        client,
+        run,
+        tokenizer,
+        trace_path,
+        *,
+        invalid_score=-1000.0,
+        self_consistency=None,
+    ):
         self.client, self.run, self.tokenizer = client, run, tokenizer
         self.trace_path = Path(trace_path)
         self.invalid_score = invalid_score
+        self.self_consistency = self_consistency
 
     def __call__(
         self,
@@ -400,13 +410,45 @@ class WeightedReward:
         ]
         total = [0.0] * count
         components = {}
+        consistency_details = None
         for name, weight in self.run["rewards"].items():
-            values = self.client.score(
-                name,
-                rows,
-                completions,
-                self.run.get("candidate_views", {}).get(name, "completion"),
-            )
+            if name == "self_consistency":
+                if self.self_consistency is None:
+                    raise ValueError(
+                        "self_consistency must be attached to the training policy"
+                    )
+                # Gold references and answer keys are never sent to this reward.
+                group_rows = [
+                    {
+                        key: row[key]
+                        for key in ("dataset", "prompt_id", "prompt", "options")
+                    }
+                    for row in rows
+                ]
+                values, consistency_details = self.self_consistency.score_groups(
+                    group_rows,
+                    completions,
+                    step=getattr(kwargs.get("trainer_state"), "global_step", 0),
+                )
+                if kwargs.get("log_metric"):
+                    for metric in (
+                        "consensus",
+                        "tied",
+                        "zero_variance",
+                        "invalid_candidates",
+                    ):
+                        kwargs["log_metric"](
+                            f"self_consistency/{metric}",
+                            sum(item[metric] for item in consistency_details)
+                            / len(consistency_details),
+                        )
+            else:
+                values = self.client.score(
+                    name,
+                    rows,
+                    completions,
+                    self.run.get("candidate_views", {}).get(name, "completion"),
+                )
             values = checked_scores(values, count)
             components[name] = values
             total = [a + weight * b for a, b in zip(total, values, strict=True)]
@@ -427,7 +469,9 @@ class WeightedReward:
                     invalid |= not reasoning_text(
                         completion, option_count=len(row["options"])
                     )
-            if invalid:
+            # The standalone binary reward already assigns zero to invalid
+            # outputs. Mixtures retain the existing explicit failure floor.
+            if invalid and set(self.run["rewards"]) != {"self_consistency"}:
                 total[i] = self.invalid_score
         total = checked_scores(total, count)
         self.trace_path.parent.mkdir(parents=True, exist_ok=True)
@@ -445,6 +489,11 @@ class WeightedReward:
                         "components": components,
                         "weights": self.run["rewards"],
                         "total": total,
+                        **(
+                            {"self_consistency": consistency_details}
+                            if consistency_details is not None
+                            else {}
+                        ),
                     },
                     allow_nan=False,
                 )
