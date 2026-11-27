@@ -367,6 +367,10 @@ probabilities and format probability mass are saved with each score. See the
 fresh three-task run directory. Historical reports retain their recorded scope;
 adding judge scores requires new inference and a new run directory.
 
+The [matched thinking comparison](reports/judge_thinking_comparison/README.md)
+includes a PDF report, paired uncertainty estimates, failure coverage and
+inference cost on the available paired subset of the frozen 6,000-pair benchmark.
+
 ```python
 from non_verifiable_rewards.rewards import (
     CausalLMScorer, LLMJudgeReward, NOVERReward, ReferenceLikelihoodReward,

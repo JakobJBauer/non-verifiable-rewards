@@ -172,3 +172,13 @@ at revision `1cfa9a7208912126459214e8b04321603b3df60c` was checked separately:
 digits 0–4 map to token IDs 15–19 and all task prompts disable thinking.
 These checks do not estimate judge agreement or validate its quality with the
 pretrained 4B weights; that requires the benchmark run.
+
+The [thinking comparison](../reports/judge_thinking_comparison/README.md)
+evaluates thinking on/off on 3,237 valid paired comparisons from the frozen
+6,000-pair 20 November benchmark. Generation was stopped at the user's request;
+unattempted pairs and failed reasoning are reported separately.
+It uses fresh vLLM scores for both conditions and
+retains historical PyTorch scores as a separate execution-stack diagnostic.
+The PDF reports paired prompt-cluster intervals, missing judgments and bounds,
+reasoning-token counts, and measured inference cost. Raw journals retain exact
+reasoning IDs; the committed tables contain scores and identifiers only.
