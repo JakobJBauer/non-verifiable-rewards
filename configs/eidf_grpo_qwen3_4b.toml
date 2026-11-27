@@ -4,6 +4,11 @@ output_dir = "/workspace/writeable/non-verifiable-rewards/outputs/grpo_qwen3_4b"
 cache_dir = "/root/.cache/non-verifiable-rewards"
 seed = 1729
 
+[wandb]
+enabled = true
+project = "non-verifiable rewards"
+entity = ""  # Use the authenticated account's default entity.
+
 [policy]
 id = "Qwen/Qwen3-4B"
 revision = "1cfa9a7208912126459214e8b04321603b3df60c"

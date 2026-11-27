@@ -37,6 +37,7 @@ training = [
     "accelerate>=1.11",
     "trl==1.18.2",
     "peft==0.22.0",
+    "wandb>=0.19,<1",
 ]
 vllm = [
     "vllm==0.23.0; sys_platform == 'linux'",

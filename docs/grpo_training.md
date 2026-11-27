@@ -293,6 +293,48 @@ checksums. `trained.json` records final model hashes. `report_artifacts.json`
 checksums benchmark/report files; optimizer checkpoints are not part of this
 report manifest. Nothing is uploaded to Hugging Face automatically.
 
+## Weights & Biases
+
+The standard PyTorch and vLLM sweep configs enable W&B in the project
+`non-verifiable rewards`, using the authenticated account's default entity:
+
+```toml
+[wandb]
+enabled = true
+project = "non-verifiable rewards"
+entity = ""  # Or an explicit W&B account/team name.
+mode = "online"
+```
+
+W&B is included in the `training` extra. Authenticate once in the training
+environment using `wandb login`, or provide `WANDB_API_KEY` through the environment.
+Credentials do not belong in TOML or Git. An empty entity uses the authenticated
+default (or W&B's configured entity); the resolved entity is saved on first use.
+
+Each reward run has its own W&B run, named after the configured run and grouped
+by the sweep output-directory name. The trainer logs every
+`optimization.logging_steps` optimizer steps (default 5): loss, learning rate,
+gradient norm, weighted reward, raw reward components (`train/component/*`),
+reference KL, entropy, completion lengths and clipping diagnostics. W&B also
+tracks system utilization. Experiment settings and reward weights are recorded
+in run configuration. Policy checkpoints and full text traces stay in the
+existing output directories; model uploads and gradient watching are disabled.
+
+`runs/<name>/wandb.json` records the run ID, resolved account and dashboard URL.
+Online retries and optimizer-checkpoint resumes reuse that ID. A different
+sweep directory starts new W&B runs. Runs are finalized on completion or failure.
+Failure to initialize requested tracking stops training; later network outages
+are handled by the SDK's local buffering and retries. As with other source/config
+changes, use a fresh `output_dir` when adopting this integration for an existing
+immutable sweep.
+
+Set `enabled = false` to disable tracking, or `mode = "offline"` to save W&B logs
+locally under `runs/<name>/wandb/` for later `wandb sync`. Offline restarts create
+separate local segments; automatic server-side resuming applies to online mode.
+Historical configs and programmatic configurations that omit `[wandb]` remain
+untracked. This integration covers training; the existing benchmark reports are
+still written locally after training.
+
 ## EIDF
 
 Use [`configs/eidf_grpo_qwen3_4b.toml`](../configs/eidf_grpo_qwen3_4b.toml): outputs,

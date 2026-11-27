@@ -8,6 +8,11 @@ datasets = ["reddit_tldr", "litbench", "wmt14_de_en", "supergpqa"]
 # Disable SuperGPQA training while keeping its held-out evaluation.
 train_supergpqa = true
 
+[wandb]
+enabled = true
+project = "non-verifiable rewards"
+entity = ""  # Use the authenticated account's default entity.
+
 [policy]
 enable_thinking = true
 
