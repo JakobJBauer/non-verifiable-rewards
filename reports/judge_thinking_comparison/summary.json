@@ -1,0 +1,472 @@
+{
+  "datasets": {
+    "reddit_tldr": {
+      "total_pairs": 988,
+      "matched_pairs": 972,
+      "matched_prompts": 834,
+      "conditions": {
+        "historical": {
+          "estimate": 0.6676954732510288,
+          "ci95": [
+            0.6373034104251721,
+            0.6981524202434016
+          ]
+        },
+        "control": {
+          "estimate": 0.6651234567901234,
+          "ci95": [
+            0.6348717948717949,
+            0.6952739643962106
+          ]
+        },
+        "thinking": {
+          "estimate": 0.6198559670781894,
+          "ci95": [
+            0.5907649458280252,
+            0.649747477342321
+          ]
+        }
+      },
+      "thinking_minus_control": {
+        "estimate": -0.04526748971193416,
+        "ci95": [
+          -0.07600857638815608,
+          -0.014871413934426269
+        ]
+      },
+      "improved": 111,
+      "regressed": 158,
+      "unchanged": 703,
+      "ties": {
+        "historical": 0,
+        "control": 1,
+        "thinking": 23
+      },
+      "scope_delta_bounds": [
+        -0.05668016194331984,
+        -0.04048582995951417
+      ],
+      "scope_sample": {
+        "historical": {
+          "valid_pairs": 988,
+          "failed_pairs": 0,
+          "valid_accuracy": 0.6690283400809717,
+          "accuracy_bounds": [
+            0.6690283400809717,
+            0.6690283400809717
+          ]
+        },
+        "control": {
+          "valid_pairs": 988,
+          "failed_pairs": 0,
+          "valid_accuracy": 0.666497975708502,
+          "accuracy_bounds": [
+            0.666497975708502,
+            0.666497975708502
+          ]
+        },
+        "thinking": {
+          "valid_pairs": 972,
+          "failed_pairs": 16,
+          "valid_accuracy": 0.6198559670781894,
+          "accuracy_bounds": [
+            0.6098178137651822,
+            0.6260121457489879
+          ]
+        }
+      },
+      "backend": {
+        "estimate": -0.0025303643724696357,
+        "ci95": [
+          -0.010978868089646533,
+          0.006024096385542169
+        ],
+        "pairs": 988,
+        "decision_changes": 19,
+        "candidate_score_mae": 0.007272919154159366
+      },
+      "transitions": [
+        [
+          214,
+          9,
+          102
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          143,
+          14,
+          489
+        ]
+      ],
+      "planned_pairs": 2000,
+      "unattempted_pairs": 1012
+    },
+    "litbench": {
+      "total_pairs": 1156,
+      "matched_pairs": 1149,
+      "matched_prompts": 579,
+      "conditions": {
+        "historical": {
+          "estimate": 0.5787641427328112,
+          "ci95": [
+            0.5453795207788888,
+            0.6123227788279774
+          ]
+        },
+        "control": {
+          "estimate": 0.5813751087902524,
+          "ci95": [
+            0.5477209543978198,
+            0.6155305619566953
+          ]
+        },
+        "thinking": {
+          "estimate": 0.5691906005221932,
+          "ci95": [
+            0.5372483118366639,
+            0.6003572407256093
+          ]
+        }
+      },
+      "thinking_minus_control": {
+        "estimate": -0.012184508268059183,
+        "ci95": [
+          -0.04213752248151173,
+          0.016978726670547662
+        ]
+      },
+      "improved": 130,
+      "regressed": 144,
+      "unchanged": 875,
+      "ties": {
+        "historical": 0,
+        "control": 0,
+        "thinking": 6
+      },
+      "scope_delta_bounds": [
+        -0.014705882352941176,
+        -0.00865051903114187
+      ],
+      "scope_sample": {
+        "historical": {
+          "valid_pairs": 1156,
+          "failed_pairs": 0,
+          "valid_accuracy": 0.5778546712802768,
+          "accuracy_bounds": [
+            0.5778546712802768,
+            0.5778546712802768
+          ]
+        },
+        "control": {
+          "valid_pairs": 1156,
+          "failed_pairs": 0,
+          "valid_accuracy": 0.5804498269896193,
+          "accuracy_bounds": [
+            0.5804498269896193,
+            0.5804498269896193
+          ]
+        },
+        "thinking": {
+          "valid_pairs": 1149,
+          "failed_pairs": 7,
+          "valid_accuracy": 0.5691906005221932,
+          "accuracy_bounds": [
+            0.5657439446366782,
+            0.5717993079584776
+          ]
+        }
+      },
+      "backend": {
+        "estimate": 0.0025951557093425604,
+        "ci95": [
+          -0.0038425515406783415,
+          0.009149550132792375
+        ],
+        "pairs": 1156,
+        "decision_changes": 15,
+        "candidate_score_mae": 0.0073032775390413675
+      },
+      "transitions": [
+        [
+          351,
+          3,
+          127
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          141,
+          3,
+          524
+        ]
+      ],
+      "planned_pairs": 2000,
+      "unattempted_pairs": 844
+    },
+    "wmt14_de_en": {
+      "total_pairs": 1120,
+      "matched_pairs": 1116,
+      "matched_prompts": 719,
+      "conditions": {
+        "historical": {
+          "estimate": 0.7150537634408602,
+          "ci95": [
+            0.6868505084131763,
+            0.743094045645297
+          ]
+        },
+        "control": {
+          "estimate": 0.7159498207885304,
+          "ci95": [
+            0.6882750855084617,
+            0.7438149646285741
+          ]
+        },
+        "thinking": {
+          "estimate": 0.6863799283154122,
+          "ci95": [
+            0.6591511936339522,
+            0.7135138719621479
+          ]
+        }
+      },
+      "thinking_minus_control": {
+        "estimate": -0.02956989247311828,
+        "ci95": [
+          -0.056759788907185485,
+          -0.0027247956403270157
+        ]
+      },
+      "improved": 105,
+      "regressed": 137,
+      "unchanged": 874,
+      "ties": {
+        "historical": 2,
+        "control": 6,
+        "thinking": 26
+      },
+      "scope_delta_bounds": [
+        -0.033035714285714286,
+        -0.029464285714285714
+      ],
+      "scope_sample": {
+        "historical": {
+          "valid_pairs": 1120,
+          "failed_pairs": 0,
+          "valid_accuracy": 0.7160714285714286,
+          "accuracy_bounds": [
+            0.7160714285714286,
+            0.7160714285714286
+          ]
+        },
+        "control": {
+          "valid_pairs": 1120,
+          "failed_pairs": 0,
+          "valid_accuracy": 0.7169642857142857,
+          "accuracy_bounds": [
+            0.7169642857142857,
+            0.7169642857142857
+          ]
+        },
+        "thinking": {
+          "valid_pairs": 1116,
+          "failed_pairs": 4,
+          "valid_accuracy": 0.6863799283154122,
+          "accuracy_bounds": [
+            0.6839285714285714,
+            0.6875
+          ]
+        }
+      },
+      "backend": {
+        "estimate": 0.0008928571428571428,
+        "ci95": [
+          -0.0050414780249794,
+          0.006855575868372943
+        ],
+        "pairs": 1120,
+        "decision_changes": 18,
+        "candidate_score_mae": 0.005390641467303342
+      },
+      "transitions": [
+        [
+          211,
+          13,
+          90
+        ],
+        [
+          2,
+          2,
+          2
+        ],
+        [
+          124,
+          11,
+          661
+        ]
+      ],
+      "planned_pairs": 2000,
+      "unattempted_pairs": 880
+    }
+  },
+  "bootstrap_samples": 10000,
+  "seed": 1729,
+  "tie_tolerance": 1e-07,
+  "planned_pairs": 6000,
+  "attempted_pairs": 3264,
+  "unattempted_pairs": 2736,
+  "planned_control_contexts": 10344,
+  "attempted_thinking_contexts": 5760,
+  "macro": {
+    "conditions": {
+      "historical": {
+        "estimate": 0.6538377931415668,
+        "ci95": [
+          0.6365679489782528,
+          0.6717527151698953
+        ]
+      },
+      "control": {
+        "estimate": 0.6541494621229688,
+        "ci95": [
+          0.6366442149361812,
+          0.6721702686413938
+        ]
+      },
+      "thinking": {
+        "estimate": 0.6251421653052649,
+        "ci95": [
+          0.6080111878081325,
+          0.6423115181558731
+        ]
+      }
+    },
+    "thinking_minus_control": {
+      "estimate": -0.029007296817703875,
+      "ci95": [
+        -0.04586566845368146,
+        -0.012655536747662306
+      ]
+    },
+    "scope_delta_bounds": [
+      -0.03480725286065844,
+      -0.026200211568313914
+    ],
+    "matched_pairs": 3237,
+    "total_pairs": 3264
+  },
+  "diagnostics": {
+    "control": {
+      "reddit_tldr": {
+        "unique_candidates": 1920,
+        "statuses": {
+          "ok": 1920
+        },
+        "inference_seconds": 93.8012370109318,
+        "thinking_tokens_total": 0,
+        "thinking_tokens_median": 0.0,
+        "thinking_tokens_p90": 0.0,
+        "rating_mass_median": 0.9999999891540748,
+        "rating_mass_p10": 0.99999987742952
+      },
+      "litbench": {
+        "unique_candidates": 1920,
+        "statuses": {
+          "ok": 1920
+        },
+        "inference_seconds": 93.807359953189,
+        "thinking_tokens_total": 0,
+        "thinking_tokens_median": 0.0,
+        "thinking_tokens_p90": 0.0,
+        "rating_mass_median": 0.9999999983179912,
+        "rating_mass_p10": 0.9999999292009226
+      },
+      "wmt14_de_en": {
+        "unique_candidates": 1920,
+        "statuses": {
+          "ok": 1920
+        },
+        "inference_seconds": 93.78505244912958,
+        "thinking_tokens_total": 0,
+        "thinking_tokens_median": 0.0,
+        "thinking_tokens_p90": 0.0,
+        "rating_mass_median": 0.9999999899484251,
+        "rating_mass_p10": 0.9999998322110345
+      },
+      "all": {
+        "unique_candidates": 5760,
+        "statuses": {
+          "ok": 5760
+        },
+        "inference_seconds": 281.3936494132504,
+        "thinking_tokens_total": 0,
+        "thinking_tokens_median": 0.0,
+        "thinking_tokens_p90": 0.0,
+        "rating_mass_median": 0.9999999930956195,
+        "rating_mass_p10": 0.999999892260748
+      }
+    },
+    "thinking": {
+      "reddit_tldr": {
+        "unique_candidates": 1920,
+        "statuses": {
+          "ok": 1905,
+          "thinking_limit": 15
+        },
+        "inference_seconds": 1435.8231562286303,
+        "thinking_tokens_total": 1117432,
+        "thinking_tokens_median": 523.0,
+        "thinking_tokens_p90": 803.1000000000001,
+        "rating_mass_median": 1.0000000012504133,
+        "rating_mass_p10": 0.9999999424765721
+      },
+      "litbench": {
+        "unique_candidates": 1920,
+        "statuses": {
+          "ok": 1913,
+          "thinking_limit": 7
+        },
+        "inference_seconds": 1437.661794774,
+        "thinking_tokens_total": 1342959,
+        "thinking_tokens_median": 673.0,
+        "thinking_tokens_p90": 850.1000000000001,
+        "rating_mass_median": 1.000000003442016,
+        "rating_mass_p10": 0.9999999460739248
+      },
+      "wmt14_de_en": {
+        "unique_candidates": 1920,
+        "statuses": {
+          "ok": 1916,
+          "thinking_limit": 4
+        },
+        "inference_seconds": 1437.3955631059455,
+        "thinking_tokens_total": 1158936,
+        "thinking_tokens_median": 562.0,
+        "thinking_tokens_p90": 814.0,
+        "rating_mass_median": 1.000000004728029,
+        "rating_mass_p10": 0.9999999426336799
+      },
+      "all": {
+        "unique_candidates": 5760,
+        "statuses": {
+          "ok": 5734,
+          "thinking_limit": 26
+        },
+        "inference_seconds": 4310.880514108576,
+        "thinking_tokens_total": 3619327,
+        "thinking_tokens_median": 595.5,
+        "thinking_tokens_p90": 830.0,
+        "rating_mass_median": 1.0000000033467833,
+        "rating_mass_p10": 0.9999999437770692
+      }
+    }
+  },
+  "stopped_early": true
+}

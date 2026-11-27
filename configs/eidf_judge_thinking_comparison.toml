@@ -1,0 +1,13 @@
+# Same frozen 6,000 preference pairs/checkpoint as the 20 November baseline.
+# Both new conditions use vLLM; historical PyTorch scores remain a diagnostic.
+source_run = "/workspace/writeable/non-verifiable-rewards/outputs/qwen3_4b_all_rewards_20261120_batched"
+run_dir = "/workspace/writeable/non-verifiable-rewards/outputs/judge_thinking_comparison_20261126"
+backend = "vllm"
+dtype = "bfloat16"
+batch_size = 128
+gpu_memory_utilization = 0.90
+max_context_tokens = 32768
+max_thinking_tokens = 4096
+seed = 1729
+bootstrap_samples = 10000
+tie_tolerance = 0.0000001

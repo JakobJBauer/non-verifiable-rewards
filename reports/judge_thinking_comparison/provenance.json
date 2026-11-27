@@ -1,0 +1,105 @@
+{
+  "manifest": {
+    "config": {
+      "source_run": "/workspace/writeable/non-verifiable-rewards/outputs/qwen3_4b_all_rewards_20261120_batched",
+      "run_dir": "/workspace/writeable/non-verifiable-rewards/outputs/judge_thinking_comparison_20261126",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "batch_size": 128,
+      "gpu_memory_utilization": 0.9,
+      "max_context_tokens": 32768,
+      "max_thinking_tokens": 4096,
+      "seed": 1729,
+      "bootstrap_samples": 10000,
+      "tie_tolerance": 1e-07
+    },
+    "model": {
+      "id": "Qwen/Qwen3-4B",
+      "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+      "path": "/root/.cache/non-verifiable-rewards/huggingface/models--Qwen--Qwen3-4B/snapshots/1cfa9a7208912126459214e8b04321603b3df60c"
+    },
+    "source_files": {
+      "config.json": "c019ee9bd249e102448e97e04ebc58a983c5ad7306f50468df6ec0e3e26de191",
+      "models.json": "aa67da27135b30684480f6fed5c3112b9825cdab1527bd84ff6a9c0def05e993",
+      "data_manifest.json": "b4dc2949798845213590ef9c7243b2d87eb3da4242a1ab0a40c29e7332c6f2ac",
+      "preprocessing.json": "700ee832bb5aa5957c7fda02ef8937aa6ac09e3ea0089722d000cb7a231e392c",
+      "scored_text/reddit_tldr.jsonl": "8ab818fa35ac8abbff21f35dae2bcb4a28f29067eeab459f8f6c9613b133fc1b",
+      "scores/lm/reddit_tldr-shard-00000-of-00001.jsonl": "011ec72de76536230260ae4e699874138783d36e16e6629af6f278ef3b04da4f",
+      "scored_text/litbench.jsonl": "ada6e2ca87eac0028f22fe95d7d1794072b4ad20db977f0452949dc331596ad0",
+      "scores/lm/litbench-shard-00000-of-00001.jsonl": "b7f3ecedfeb6333509daff8ae9de2deb88fb71ccb8e76b8280ae3d9b33b7c577",
+      "scored_text/wmt14_de_en.jsonl": "a961f42e3d5f4a77b7c6931e10c9f3575da436017ed299241e16a9a4590bf408",
+      "scores/lm/wmt14_de_en-shard-00000-of-00001.jsonl": "625330b709487c845e46cb237634fdbba5966948aefd4c139d18d00098e4ca0a"
+    },
+    "pairs": 6000,
+    "candidate_occurrences": 12000,
+    "unique_candidates": 10344,
+    "pairs_by_dataset": {
+      "reddit_tldr": 2000,
+      "litbench": 2000,
+      "wmt14_de_en": 2000
+    },
+    "unique_candidates_by_dataset": {
+      "reddit_tldr": 3800,
+      "litbench": 3258,
+      "wmt14_de_en": 3286
+    },
+    "candidates_sha256": "fa552bf2d622ad6602180cd748d4637ba022a86663dfde6acb95af2fd0743f8a",
+    "pairs_sha256": "37d53add7a85675b04d105e72b35f975b3cee4d5044299247bdd33a35b630943",
+    "historical_prompt_hashes_checked": true
+  },
+  "scoring_identity": {
+    "manifest_sha256": "753338fdfb805d46a531d43115496a977a096ffa769b83e2da67c2a2ae95461a",
+    "code": {
+      "experiments/judge_comparison.py": "e0d56046cf46cfbb45fbf9785f0a3113910a1d9ad7ba15c3b7eb33bd58b6e4f7",
+      "rewards/llm_judge.py": "7b0c3a54bb564a6ceedfd4f3c773599f95b847de5e067c35b38a1040af5fd168",
+      "rewards/causal_lm.py": "fe9e0639d5fd3024c79e4e9c17f04aa37a832eb0dc19803fa2cf1b9a03430db5",
+      "inference/scorer.py": "6adb46c7b287142baab6e4449a596462f765cfeaec947ce79ee10c13d25196c0"
+    },
+    "packages": {
+      "torch": "2.11.0+cu129",
+      "transformers": "5.22.2",
+      "vllm": "0.23.0+cu129"
+    }
+  },
+  "analysis_scope": {
+    "kind": "user_stopped_prefix_v1",
+    "reason": "The user requested stopping generation and reporting the already saved results.",
+    "frozen_at_utc": "2026-11-27T00:37:34.818100+00:00",
+    "manifest_sha256": "753338fdfb805d46a531d43115496a977a096ffa769b83e2da67c2a2ae95461a",
+    "journal_sha256": {
+      "control": "935eddf4727f08d17b85bbc2a525b0f2886a044ac17f1f147cd4a3c3a8a13bd0",
+      "thinking": "3a6a2b9cceb3f800fb4db41102e118d0d5d8861c0d1a64315a0e34d296ba8685"
+    },
+    "observed_thinking_candidates": 5760,
+    "planned_unique_candidates": 10344,
+    "included_pairs_sha256": "dbbe11d3dc6b0fdbe76098769f64bb52e62a6656f1c5b14f7aec1896ffca447e",
+    "included_pairs_by_dataset": {
+      "reddit_tldr": 988,
+      "litbench": 1156,
+      "wmt14_de_en": 1120
+    },
+    "selection": "Both candidate contexts were recorded before the user stopped generation; successful closure is not required for inclusion."
+  },
+  "raw_files_sha256": {
+    "manifest.json": "753338fdfb805d46a531d43115496a977a096ffa769b83e2da67c2a2ae95461a",
+    "candidates.jsonl": "ece43a0ade6e60c47f2759e9a1179f2be651c4f1fae272586d7c2c07ecf470d3",
+    "pairs.jsonl": "b83db21fa86e498637174c097304ab36a4f3dc36569bf13bc812162a6c853da0",
+    "control.jsonl": "935eddf4727f08d17b85bbc2a525b0f2886a044ac17f1f147cd4a3c3a8a13bd0",
+    "thinking.jsonl": "3a6a2b9cceb3f800fb4db41102e118d0d5d8861c0d1a64315a0e34d296ba8685",
+    "run_status.json": "9718ff1859cbd0804b0e4522d054bdc3e177f46e859736462f4e0ec08876c353",
+    "scoring_identity.json": "e7272a272d392d0f621ea216676c6c4bd301deba9304ead57a78fb071c957697",
+    "analysis_scope.json": "eda3c4396fd64c6cbfc6d58d11efddf8967f127211931dc9b6bf0bd2aaa1ba47",
+    "hardware.csv": "420da40cef0cc1c28c3980d4b5902c9551bb7c7c1608055545f7e2366903df8b",
+    "scoring_source.tar.gz": "0f9f77d9be1d344754acc52a6c72c76c6c277b322991143a8b7946c8b4f00202"
+  },
+  "analysis_identity": {
+    "judge_report_sha256": "3c3159f05c066059e7902b0c894edd03ac4d684fdb1b881d2f96f7cfb284fdf8",
+    "analysis_sha256": "f41481a134da1ea8f73c9c8cf277a143db4bd8cff26cb198631f04846dabf139",
+    "packages": {
+      "numpy": "2.5.4",
+      "pandas": "3.1.1",
+      "matplotlib": "3.11.2"
+    }
+  },
+  "hardware": "name, uuid, driver_version, memory.total [MiB]\nNVIDIA A100-SXM4-40GB, GPU-493496a4-1dfa-727b-d5ff-e04e8d6fc9ad, 570.124.06, 40960 MiB"
+}
